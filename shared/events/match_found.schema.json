@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "match.found",
+  "description": "Published by matching-engine once a CV/job pair passes the gate and is scored. Consumed by interview-prep (and optionally a notifications piece).",
+  "type": "object",
+  "required": ["event", "cv_id", "job_id", "overall_score", "source_url", "breakdown", "computed_at"],
+  "properties": {
+    "event": { "const": "match.found" },
+    "cv_id": { "type": "string", "format": "uuid" },
+    "job_id": { "type": "string", "format": "uuid" },
+    "overall_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "source_url": { "type": "string", "format": "uri" },
+    "breakdown": {
+      "type": "object",
+      "required": ["skills", "experience", "seniority"],
+      "properties": {
+        "skills": {
+          "type": "object",
+          "required": ["matched", "missing", "matched_count", "required_count", "score"],
+          "properties": {
+            "matched": { "type": "array", "items": { "type": "string" } },
+            "missing": { "type": "array", "items": { "type": "string" } },
+            "matched_count": { "type": "integer" },
+            "required_count": { "type": "integer" },
+            "score": { "type": "integer" }
+          }
+        },
+        "experience": {
+          "type": "object",
+          "required": ["required_years", "candidate_years", "score"],
+          "properties": {
+            "required_years": { "type": "number" },
+            "candidate_years": { "type": "number" },
+            "score": { "type": "integer" }
+          }
+        },
+        "seniority": {
+          "type": "object",
+          "required": ["candidate", "required", "score"],
+          "properties": {
+            "candidate": { "type": "string" },
+            "required": { "type": "string" },
+            "score": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "computed_at": { "type": "string", "format": "date-time" }
+  },
+  "example": {
+    "event": "match.found",
+    "cv_id": "cv_8841",
+    "job_id": "job_2093",
+    "overall_score": 73,
+    "source_url": "https://remoteok.com/remote-jobs/12345-backend-engineer",
+    "breakdown": {
+      "skills": { "matched": ["python", "django", "postgresql"], "missing": ["aws"], "matched_count": 3, "required_count": 4, "score": 75 },
+      "experience": { "required_years": 3, "candidate_years": 2, "score": 67 },
+      "seniority": { "candidate": "junior", "required": "mid", "score": 75 }
+    },
+    "computed_at": "2026-07-15T02:14:00Z"
+  }
+}

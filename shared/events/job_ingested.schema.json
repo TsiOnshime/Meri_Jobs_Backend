@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "job.ingested",
+  "description": "Published by job-ingestion when a new or updated job listing is fetched. Consumed by matching-engine.",
+  "type": "object",
+  "required": ["event", "job_id", "skills", "min_experience", "seniority_level", "role_category", "location", "source_url", "timestamp"],
+  "properties": {
+    "event": { "const": "job.ingested" },
+    "job_id": { "type": "string", "format": "uuid" },
+    "skills": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Unresolved skill strings exactly as scraped/received from the source."
+    },
+    "min_experience": { "type": "number", "minimum": 0 },
+    "seniority_level": { "type": "string", "enum": ["junior", "mid", "senior", "lead"] },
+    "role_category": { "type": "string" },
+    "location": { "type": "string" },
+    "source_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Direct, stable link to the original listing. Used by the frontend's Apply button."
+    },
+    "timestamp": { "type": "string", "format": "date-time" }
+  },
+  "example": {
+    "event": "job.ingested",
+    "job_id": "job_2093",
+    "skills": ["Python", "Django", "PostgreSQL", "AWS"],
+    "min_experience": 3,
+    "seniority_level": "mid",
+    "role_category": "backend_engineer",
+    "location": "remote",
+    "source_url": "https://remoteok.com/remote-jobs/12345-backend-engineer",
+    "timestamp": "2026-07-15T02:05:00Z"
+  }
+}

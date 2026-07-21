@@ -1,0 +1,32 @@
+# Env
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Django
+**/staticfiles/
+**/media/
+db.sqlite3
+**/migrations/__pycache__/
+
+# Docker
+*.pid
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Node (frontend not in this repo, but just in case)
+node_modules/

@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "cv.parsed",
+  "description": "Published by cv-parser once a CV upload has been extracted. Consumed by matching-engine.",
+  "type": "object",
+  "required": ["event", "cv_id", "raw_skills", "experience_years", "seniority", "role_category", "timestamp"],
+  "properties": {
+    "event": { "const": "cv.parsed" },
+    "cv_id": { "type": "string", "format": "uuid" },
+    "raw_skills": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Unresolved skill strings exactly as extracted from the CV, e.g. 'JS', 'Django'."
+    },
+    "experience_years": { "type": "number", "minimum": 0 },
+    "seniority": { "type": "string", "enum": ["junior", "mid", "senior", "lead"] },
+    "role_category": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" }
+  },
+  "example": {
+    "event": "cv.parsed",
+    "cv_id": "cv_8841",
+    "raw_skills": ["Python", "Django", "PostgreSQL", "AWS basics"],
+    "experience_years": 2,
+    "seniority": "junior",
+    "role_category": "backend_engineer",
+    "timestamp": "2026-07-15T02:00:00Z"
+  }
+}
