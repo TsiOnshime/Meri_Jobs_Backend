@@ -123,6 +123,20 @@ services:
     volumes:
       - ./services/interview-prep:/app
 
+  interview-prep-worker:
+    build: ./services/interview-prep
+    command: celery -A config worker --loglevel=info
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./services/interview-prep:/app
+
   users:
     build: ./services/users
     env_file: .env
