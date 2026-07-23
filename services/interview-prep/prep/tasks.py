@@ -3,6 +3,10 @@
 Mirrors cv-parser's pattern: the view returns 202 immediately, this task
 does the slow LLM call in the background, and the client polls
 GET /interview/answer/{answer_id} for the result.
+
+Only ever queued for open_ended answers. multiple_choice answers are graded
+synchronously in the view (selected_option == correct_option) since that's
+deterministic and doesn't need an LLM call.
 """
 from celery import shared_task
 from django.utils import timezone
@@ -18,9 +22,17 @@ def evaluate_answer(self, answer_id):
     from .generation.feedback import generate_feedback
 
     try:
-        answer = Answer.objects.select_related("question").get(id=answer_id)
+        answer = Answer.objects.select_related("question", "question__session").get(
+            id=answer_id
+        )
     except Answer.DoesNotExist:
         # Nothing sensible to retry -- the row is just gone.
+        return
+
+    if answer.question.question_type != "open_ended":
+        # Defensive: this task should only ever be queued for open_ended
+        # answers. If it lands here for a multiple_choice answer, something
+        # upstream queued it by mistake -- don't burn an LLM call on it.
         return
 
     try:
@@ -49,3 +61,21 @@ def evaluate_answer(self, answer_id):
             "completed_at",
         ]
     )
+
+    _mark_session_complete_if_done(answer.question.session)
+
+
+def _mark_session_complete_if_done(session):
+    """Flip InterviewSession.status once every round has a completed answer.
+
+    session.status is a stored field (unlike rounds_completed/is_complete,
+    which are computed on the fly), so something has to be the one place
+    that actually writes "completed" to it. This task is that place for
+    open_ended rounds; the view's synchronous multiple_choice grading path
+    needs to call the same check after it grades an answer.
+    """
+    if session.status == "completed":
+        return
+    if session.rounds_completed >= session.total_rounds:
+        session.status = "completed"
+        session.save(update_fields=["status"])
