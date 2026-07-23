@@ -12,6 +12,13 @@ class InterviewSession(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # api-gateway is the one caller allowed to reach this service directly
+    # (see docs/architecture.md), and it already attaches the caller's
+    # user_id when it proxies POST /interview/session and builds the URL
+    # for GET /interview/history/{user_id}. We store it so /history can
+    # actually scope results to one account instead of returning every
+    # user's sessions.
+    user_id = models.UUIDField(db_index=True)
     job_id = models.UUIDField()
     job_title = models.CharField(max_length=255, blank=True, default="")
     focus_area = models.CharField(max_length=100, blank=True, default="")
