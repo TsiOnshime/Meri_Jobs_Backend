@@ -1,142 +1,161 @@
+"""Per-user rate limiting middleware."""
 import redis
 from django.conf import settings
 from django.http import JsonResponse
-from django.utils.deprecation import MiddlewareMixin
-import logging
+from decouple import config
+from rest_framework.exceptions import Throttled
+import uuid
 
-logger = logging.getLogger(__name__)
 
-
-class RateLimitMiddleware(MiddlewareMixin):
-    """
-    Redis-backed rate limiting middleware using fixed window counter.
-    """
+class RateLimitMiddleware:
+    """Redis-based rate limiting middleware for API Gateway with per-endpoint limits."""
+    
+    # Per-endpoint rate limits (requests per minute)
+    ENDPOINT_LIMITS = {
+        # Auth endpoints: 5 / minute
+        "auth/register": 5,
+        "auth/login": 5,
+        "auth/refresh": 5,
+        "auth/logout": 5,
+        "auth/me": 5,
+        
+        # CV upload: 2 / minute
+        "cv/upload": 2,
+        
+        # CV other endpoints: 20 / minute
+        "cv/": 20,
+        
+        # Jobs/matching endpoints: 200 / minute
+        "matches/": 200,
+        
+        # Interview endpoints: 10 / minute
+        "interview/": 10,
+        
+        # Dashboard: 30 / minute
+        "dashboard": 30,
+        
+        # Default: 100 / minute
+        "default": 100
+    }
     
     def __init__(self, get_response):
-        super().__init__(get_response)
+        self.get_response = get_response
         self.redis_client = redis.Redis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            db=1,  # Separate DB for rate limiting
-            decode_responses=True,
-            socket_connect_timeout=5,
-            socket_timeout=5
+            host=config("REDIS_HOST", default="redis"),
+            port=config("REDIS_PORT", default=6379, cast=int),
+            db=0,
+            decode_responses=True
         )
+        # Default hourly limit
+        self.requests_per_hour = config("RATE_LIMIT_RPH", default=1000, cast=int)
     
-    def process_request(self, request):
-        # Skip rate limiting for health check
-        if request.path == '/health':
-            return None
+    def __call__(self, request):
+        # Skip rate limiting for health checks
+        if request.path in ["/internal/health", "/api/v1/health", "/health"]:
+            return self.get_response(request)
         
-        # Get identifier (user_id if authenticated, IP otherwise)
+        # Get endpoint-specific limit
+        endpoint_limit = self._get_endpoint_limit(request.path)
+        
+        # Get identifier (user ID if authenticated, otherwise IP)
         identifier = self._get_identifier(request)
         
-        # Get endpoint type
-        endpoint = self._get_endpoint_type(request.path)
-        
-        # Get rate limit config
-        config = self._get_rate_limit_config(endpoint)
-        
-        # Check rate limit
-        allowed = self._check_rate_limit(identifier, config)
-        
-        if not allowed:
-            logger.warning(f"Rate limit exceeded for {identifier} on {endpoint}")
+        # Check rate limits
+        if not self._check_rate_limit(identifier, endpoint_limit, request.path):
             return JsonResponse(
                 {
-                    'error': {
-                        'code': 'RATE_LIMIT_EXCEEDED',
-                        'message': f"Rate limit exceeded: {config['requests_per_minute']} requests per minute"
-                    }
+                    "error": {
+                        "code": "RATE_LIMIT_EXCEEDED",
+                        "message": "Rate limit exceeded. Please try again later."
+                    },
+                    "correlation_id": str(uuid.uuid4())
                 },
                 status=429
             )
         
-        return None
-    
-    def process_response(self, request, response):
+        response = self.get_response(request)
+        
         # Add rate limit headers
-        if request.path != '/health':
-            identifier = self._get_identifier(request)
-            endpoint = self._get_endpoint_type(request.path)
-            config = self._get_rate_limit_config(endpoint)
-            remaining = self._get_remaining_requests(identifier, config)
-            
-            response['X-RateLimit-Limit-Minute'] = str(config['requests_per_minute'])
-            response['X-RateLimit-Remaining-Minute'] = str(remaining['minute_remaining'])
+        response["X-RateLimit-Limit-Minute"] = str(endpoint_limit)
+        response["X-RateLimit-Remaining-Minute"] = str(self._get_remaining_requests(identifier, request.path))
         
         return response
     
-    def _get_identifier(self, request):
-        """Get unique identifier for rate limiting"""
-        if hasattr(request, 'user_id'):
-            return f"user:{request.user_id}"
+    def _get_endpoint_limit(self, path):
+        """Get rate limit for specific endpoint."""
+        # Remove /api/v1/ prefix if present
+        clean_path = path.replace("/api/v1/", "").replace("/internal/", "")
         
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        # Check for exact matches
+        if clean_path in self.ENDPOINT_LIMITS:
+            return self.ENDPOINT_LIMITS[clean_path]
+        
+        # Check for prefix matches
+        for endpoint, limit in self.ENDPOINT_LIMITS.items():
+            if endpoint != "default" and clean_path.startswith(endpoint):
+                return limit
+        
+        # Return default limit
+        return self.ENDPOINT_LIMITS["default"]
+    
+    def _get_identifier(self, request):
+        """Get unique identifier for rate limiting (user ID or IP)."""
+        # Try to get user ID from JWT authentication
+        try:
+            from ..auth.jwt import JWTAuthentication
+            jwt_auth = JWTAuthentication()
+            user_id = jwt_auth.get_user_id(request)
+            if user_id:
+                return f"user:{user_id}"
+        except:
+            pass
+        
+        # Fall back to IP address
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0].strip()
+            ip = x_forwarded_for.split(",")[0]
         else:
-            ip = request.META.get('REMOTE_ADDR', 'unknown')
+            ip = request.META.get("REMOTE_ADDR", "unknown")
         
         return f"ip:{ip}"
     
-    def _get_endpoint_type(self, path):
-        """Determine endpoint type from path"""
-        if path.startswith('/api/v1/auth'):
-            return 'auth'
-        elif path.startswith('/api/v1/cv/upload'):
-            return 'cv_upload'
-        elif path.startswith('/api/v1/jobs'):
-            return 'jobs'
-        elif path.startswith('/api/v1/interview'):
-            return 'interview'
-        return 'default'
-    
-    def _get_rate_limit_config(self, endpoint):
-        """Get rate limit configuration for endpoint"""
-        configs = {
-            'auth': {'requests_per_minute': 5, 'requests_per_hour': 20},
-            'cv_upload': {'requests_per_minute': 2, 'requests_per_hour': 10},
-            'jobs': {'requests_per_minute': 200, 'requests_per_hour': 2000},
-            'interview': {'requests_per_minute': 10, 'requests_per_hour': 100},
-            'default': {'requests_per_minute': 100, 'requests_per_hour': 1000}
-        }
-        return configs.get(endpoint, configs['default'])
-    
-    def _check_rate_limit(self, identifier, config):
-        """Check if request is within rate limit"""
+    def _check_rate_limit(self, identifier, limit_per_minute, path):
+        """Check if the identifier has exceeded rate limits."""
+        clean_path = path.replace("/api/v1/", "").replace("/internal/", "")
+        minute_key = f"ratelimit:{identifier}:{clean_path}:minute"
+        hour_key = f"ratelimit:{identifier}:hour"
+        
         try:
-            key = f"ratelimit:{identifier}:minute"
-            pipe = self.redis_client.pipeline()
-            current = pipe.get(key)
-            pipe.execute()
+            # Check minute limit
+            minute_count = self.redis_client.incr(minute_key)
+            if minute_count == 1:
+                self.redis_client.expire(minute_key, 60)
             
-            if current is None:
-                pipe.setex(key, 60, 1)
-                pipe.execute()
-                return True
-            
-            current = int(current)
-            if current >= config['requests_per_minute']:
-                pipe.reset()
+            if minute_count > limit_per_minute:
                 return False
             
-            pipe.incr(key)
-            pipe.expire(key, 60)
-            pipe.execute()
+            # Check hour limit
+            hour_count = self.redis_client.incr(hour_key)
+            if hour_count == 1:
+                self.redis_client.expire(hour_key, 3600)
+            
+            if hour_count > self.requests_per_hour:
+                return False
+            
             return True
             
-        except Exception as e:
-            logger.error(f"Redis error in rate limiter: {e}")
-            return True  # Fail open
+        except redis.RedisError:
+            # If Redis is unavailable, allow the request (fail open)
+            return True
     
-    def _get_remaining_requests(self, identifier, config):
-        """Get remaining requests for headers"""
+    def _get_remaining_requests(self, identifier, path):
+        """Get remaining requests for the current minute."""
+        clean_path = path.replace("/api/v1/", "").replace("/internal/", "")
+        minute_key = f"ratelimit:{identifier}:{clean_path}:minute"
+        endpoint_limit = self._get_endpoint_limit(path)
+        
         try:
-            key = f"ratelimit:{identifier}:minute"
-            current = int(self.redis_client.get(key) or 0)
-            return {
-                'minute_remaining': max(0, config['requests_per_minute'] - current)
-            }
-        except:
-            return {'minute_remaining': config['requests_per_minute']}
+            current_count = int(self.redis_client.get(minute_key) or 0)
+            return max(0, endpoint_limit - current_count)
+        except redis.RedisError:
+            return endpoint_limit
