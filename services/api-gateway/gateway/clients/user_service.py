@@ -25,6 +25,15 @@ class UserServiceClient:
         """Make HTTP request to users service."""
         url = f"{self.base_url}{endpoint}"
         
+        # Ensure headers dict exists
+        if headers is None:
+            headers = {}
+        
+        # Forward Authorization header if provided
+        # This is for service-to-service authentication
+        if "Authorization" not in headers and hasattr(self, 'auth_token') and self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+        
         try:
             response = requests.request(
                 method=method,
@@ -41,6 +50,10 @@ class UserServiceClient:
                 "error": f"Failed to communicate with users service: {str(e)}",
                 "status": "error"
             }
+    
+    def set_auth_token(self, auth_token: str):
+        """Set authentication token for service-to-service requests."""
+        self.auth_token = auth_token
     
     def get_user(self, user_id: str, auth_token: str) -> Dict[str, Any]:
         """Get user details by ID."""

@@ -25,6 +25,15 @@ class MatchingEngineClient:
         """Make HTTP request to matching engine service."""
         url = f"{self.base_url}{endpoint}"
         
+        # Ensure headers dict exists
+        if headers is None:
+            headers = {}
+        
+        # Forward Authorization header if provided
+        # This is for service-to-service authentication
+        if "Authorization" not in headers and hasattr(self, 'auth_token') and self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+        
         try:
             response = requests.request(
                 method=method,
@@ -41,6 +50,10 @@ class MatchingEngineClient:
                 "error": f"Failed to communicate with matching engine: {str(e)}",
                 "status": "error"
             }
+    
+    def set_auth_token(self, auth_token: str):
+        """Set authentication token for service-to-service requests."""
+        self.auth_token = auth_token
     
     def get_matches_by_cv(
         self, 

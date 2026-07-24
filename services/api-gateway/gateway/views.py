@@ -5,7 +5,6 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema
 from .clients.user_service import UserServiceClient
 from .clients.matching_engine import MatchingEngineClient
-from .auth.jwt import JWTAuthentication
 import uuid
 
 
@@ -93,16 +92,11 @@ def auth_refresh(request):
 @api_view(["POST"])
 def auth_logout(request):
     """Proxy logout request to users service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
-    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    # Authentication is handled by middleware
     user_client = UserServiceClient()
+    user_client.set_auth_token(request.auth_token)
     
-    result = user_client.logout(request.data.get("refresh"), auth_header.replace("Bearer ", ""))
+    result = user_client.logout(request.data.get("refresh"), request.auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -113,16 +107,11 @@ def auth_logout(request):
 @api_view(["GET"])
 def auth_me(request):
     """Proxy current user request to users service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
-    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    # Authentication is handled by middleware
     user_client = UserServiceClient()
+    user_client.set_auth_token(request.auth_token)
     
-    result = user_client.get_me(auth_header.replace("Bearer ", ""))
+    result = user_client.get_me(request.auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -133,16 +122,11 @@ def auth_me(request):
 @api_view(["POST"])
 def auth_change_password(request):
     """Proxy password change request to users service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
-    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    # Authentication is handled by middleware
     user_client = UserServiceClient()
+    user_client.set_auth_token(request.auth_token)
     
-    result = user_client.change_password(request.data, auth_header.replace("Bearer ", ""))
+    result = user_client.change_password(request.data, request.auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -153,19 +137,14 @@ def auth_change_password(request):
 @api_view(["GET", "PUT"])
 def profile(request):
     """Proxy profile request to users service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
-    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    # Authentication is handled by middleware
     user_client = UserServiceClient()
+    user_client.set_auth_token(request.auth_token)
     
     if request.method == "GET":
-        result = user_client.get_profile(auth_header.replace("Bearer ", ""))
+        result = user_client.get_profile(request.auth_token)
     else:  # PUT
-        result = user_client.update_profile(request.data, auth_header.replace("Bearer ", ""))
+        result = user_client.update_profile(request.data, request.auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -176,19 +155,14 @@ def profile(request):
 @api_view(["GET", "PUT"])
 def profile_detail(request):
     """Proxy profile detail request to users service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
-    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    # Authentication is handled by middleware
     user_client = UserServiceClient()
+    user_client.set_auth_token(request.auth_token)
     
     if request.method == "GET":
-        result = user_client.get_profile_detail(auth_header.replace("Bearer ", ""))
+        result = user_client.get_profile_detail(request.auth_token)
     else:  # PUT
-        result = user_client.update_profile_detail(request.data, auth_header.replace("Bearer ", ""))
+        result = user_client.update_profile_detail(request.data, request.auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -200,12 +174,7 @@ def profile_detail(request):
 @api_view(["POST"])
 def cv_upload(request):
     """Proxy CV upload request to cv-parser service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     # TODO: Implement cv-parser client
     return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -213,12 +182,7 @@ def cv_upload(request):
 @api_view(["GET"])
 def cv_status(request, cv_id):
     """Proxy CV status request to cv-parser service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     # TODO: Implement cv-parser client
     return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -226,12 +190,7 @@ def cv_status(request, cv_id):
 @api_view(["PATCH"])
 def cv_update(request, cv_id):
     """Proxy CV update request to cv-parser service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     # TODO: Implement cv-parser client
     return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -239,12 +198,7 @@ def cv_update(request, cv_id):
 @api_view(["GET"])
 def cv_export(request, cv_id):
     """Proxy CV export request to cv-parser service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     # TODO: Implement cv-parser client
     return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -252,12 +206,7 @@ def cv_export(request, cv_id):
 @api_view(["POST"])
 def cv_suggestions_accept(request, cv_id):
     """Proxy CV suggestion accept request to cv-parser service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     # TODO: Implement cv-parser client
     return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -266,18 +215,14 @@ def cv_suggestions_accept(request, cv_id):
 @api_view(["GET"])
 def matches_list(request, cv_id):
     """Proxy matches list request to matching engine."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     min_score = request.query_params.get("min_score")
     limit = int(request.query_params.get("limit", 20))
     offset = int(request.query_params.get("offset", 0))
     sort = request.query_params.get("sort", "score")
     
     matching_client = MatchingEngineClient()
+    matching_client.set_auth_token(request.auth_token)
     result = matching_client.get_matches_by_cv(cv_id, min_score, limit, offset, sort)
     
     if "error" in result:
@@ -289,13 +234,9 @@ def matches_list(request, cv_id):
 @api_view(["GET"])
 def match_detail(request, cv_id, job_id):
     """Proxy match detail request to matching engine."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     matching_client = MatchingEngineClient()
+    matching_client.set_auth_token(request.auth_token)
     result = matching_client.get_match_detail(cv_id, job_id)
     
     if "error" in result:
@@ -308,12 +249,7 @@ def match_detail(request, cv_id, job_id):
 @api_view(["POST"])
 def interview_session(request):
     """Proxy interview session creation to interview-prep service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     # TODO: Implement interview-prep client
     return error_response("SERVICE_UNAVAILABLE", "Interview Prep service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -321,12 +257,7 @@ def interview_session(request):
 @api_view(["POST"])
 def interview_answer(request, session_id):
     """Proxy interview answer submission to interview-prep service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     # TODO: Implement interview-prep client
     return error_response("SERVICE_UNAVAILABLE", "Interview Prep service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -334,12 +265,7 @@ def interview_answer(request, session_id):
 @api_view(["GET"])
 def interview_answer_feedback(request, answer_id):
     """Proxy interview answer feedback request to interview-prep service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     # TODO: Implement interview-prep client
     return error_response("SERVICE_UNAVAILABLE", "Interview Prep service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -347,12 +273,7 @@ def interview_answer_feedback(request, answer_id):
 @api_view(["GET"])
 def interview_history(request):
     """Proxy interview history request to interview-prep service."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     limit = int(request.query_params.get("limit", 10))
     offset = int(request.query_params.get("offset", 0))
     job_id = request.query_params.get("job_id")
@@ -365,11 +286,6 @@ def interview_history(request):
 @api_view(["GET"])
 def dashboard(request):
     """Aggregate dashboard data from multiple services."""
-    jwt_auth = JWTAuthentication()
-    user, token = jwt_auth.authenticate(request)
-    
-    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
-        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
-    
+    # Authentication is handled by middleware
     # TODO: Aggregate data from users, cv-parser, matching-engine, and interview-prep
     return error_response("SERVICE_UNAVAILABLE", "Dashboard aggregation not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
