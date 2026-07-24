@@ -130,6 +130,72 @@ def auth_me(request):
     return Response(result)
 
 
+@api_view(["POST"])
+def auth_change_password(request):
+    """Proxy password change request to users service."""
+    jwt_auth = JWTAuthentication()
+    user, token = jwt_auth.authenticate(request)
+    
+    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
+        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
+    
+    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    user_client = UserServiceClient()
+    
+    result = user_client.change_password(request.data, auth_header.replace("Bearer ", ""))
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
+
+
+@api_view(["GET", "PUT"])
+def profile(request):
+    """Proxy profile request to users service."""
+    jwt_auth = JWTAuthentication()
+    user, token = jwt_auth.authenticate(request)
+    
+    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
+        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
+    
+    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    user_client = UserServiceClient()
+    
+    if request.method == "GET":
+        result = user_client.get_profile(auth_header.replace("Bearer ", ""))
+    else:  # PUT
+        result = user_client.update_profile(request.data, auth_header.replace("Bearer ", ""))
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
+
+
+@api_view(["GET", "PUT"])
+def profile_detail(request):
+    """Proxy profile detail request to users service."""
+    jwt_auth = JWTAuthentication()
+    user, token = jwt_auth.authenticate(request)
+    
+    if not user or not hasattr(user, "is_authenticated") or not user.is_authenticated:
+        return error_response("AUTH_INVALID_TOKEN", "Authentication required", status.HTTP_401_UNAUTHORIZED)
+    
+    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    user_client = UserServiceClient()
+    
+    if request.method == "GET":
+        result = user_client.get_profile_detail(auth_header.replace("Bearer ", ""))
+    else:  # PUT
+        result = user_client.update_profile_detail(request.data, auth_header.replace("Bearer ", ""))
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
+
+
 # CV Parser endpoints (proxied to cv-parser service)
 @api_view(["POST"])
 def cv_upload(request):

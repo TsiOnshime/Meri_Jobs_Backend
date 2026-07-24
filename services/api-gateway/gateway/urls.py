@@ -11,6 +11,11 @@ urlpatterns = [
     path("auth/refresh", views.auth_refresh, name="auth_refresh"),
     path("auth/logout", views.auth_logout, name="auth_logout"),
     path("auth/me", views.auth_me, name="auth_me"),
+    path("auth/change-password", views.auth_change_password, name="auth_change_password"),
+    
+    # Profile management endpoints (proxied to users service)
+    path("users/profile", views.profile, name="profile"),
+    path("users/profile/detail", views.profile_detail, name="profile_detail"),
     
     # CV Parser endpoints (proxied to cv-parser service)
     path("cv/upload", views.cv_upload, name="cv_upload"),

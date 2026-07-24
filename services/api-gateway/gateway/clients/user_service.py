@@ -118,6 +118,54 @@ class UserServiceClient:
             headers=headers
         )
     
+    def change_password(self, password_data: Dict[str, Any], auth_token: str) -> Dict[str, Any]:
+        """Change user password."""
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        return self._make_request(
+            "POST",
+            "/api/v1/auth/change-password/",
+            data=password_data,
+            headers=headers
+        )
+    
+    def get_profile(self, auth_token: str) -> Dict[str, Any]:
+        """Get user profile."""
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        return self._make_request(
+            "GET",
+            "/api/v1/profile/",
+            headers=headers
+        )
+    
+    def update_profile(self, profile_data: Dict[str, Any], auth_token: str) -> Dict[str, Any]:
+        """Update user profile."""
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        return self._make_request(
+            "PUT",
+            "/api/v1/profile/",
+            data=profile_data,
+            headers=headers
+        )
+    
+    def get_profile_detail(self, auth_token: str) -> Dict[str, Any]:
+        """Get user profile details."""
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        return self._make_request(
+            "GET",
+            "/api/v1/profile/detail/",
+            headers=headers
+        )
+    
+    def update_profile_detail(self, profile_data: Dict[str, Any], auth_token: str) -> Dict[str, Any]:
+        """Update user profile details."""
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        return self._make_request(
+            "PUT",
+            "/api/v1/profile/detail/",
+            data=profile_data,
+            headers=headers
+        )
+    
     def health_check(self) -> Dict[str, Any]:
         """Check users service health."""
         return self._make_request("GET", "/api/v1/health/")
