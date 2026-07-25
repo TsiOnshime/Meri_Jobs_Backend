@@ -21,12 +21,8 @@ class RegisterView(APIView):
             refresh = RefreshToken.for_user(user)
             return Response({
                 'user': UserSerializer(user).data,
-                'tokens': {
-                    'access': str(refresh.access_token),
-                    'refresh': str(refresh),
-                    'access_expires_in': 60 * 60,
-                    'refresh_expires_in': 30 * 24 * 60 * 60
-                }
+                'access': str(refresh.access_token),
+                'refresh': str(refresh)
             }, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -53,13 +49,9 @@ class LoginView(APIView):
             
             refresh = RefreshToken.for_user(user)
             return Response({
-                'user': UserSerializer(user).data,
-                'tokens': {
-                    'access': str(refresh.access_token),
-                    'refresh': str(refresh),
-                    'access_expires_in': 60 * 60,
-                    'refresh_expires_in': 30 * 24 * 60 * 60
-                }
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': UserSerializer(user).data
             }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -74,12 +66,8 @@ class TokenRefreshView(APIView):
         try:
             refresh = RefreshToken(serializer.validated_data['refresh'])
             return Response({
-                'tokens': {
-                    'access': str(refresh.access_token),
-                    'refresh': str(refresh),
-                    'access_expires_in': 60 * 60,
-                    'refresh_expires_in': 30 * 24 * 60 * 60
-                }
+                'access': str(refresh.access_token),
+                'refresh': str(refresh)
             }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': 'Invalid refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -94,7 +82,7 @@ class LogoutView(APIView):
         try:
             refresh = RefreshToken(serializer.validated_data['refresh'])
             refresh.blacklist()
-            return Response({'message': 'Logged out successfully'}, status=status.HTTP_200_OK)
+            return Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -105,3 +93,70 @@ class CurrentUserView(APIView):
             return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
         
         return Response({'user': UserSerializer(request.user).data}, status=status.HTTP_200_OK)
+
+
+class ProfileView(APIView):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        return Response({'user': UserSerializer(request.user).data}, status=status.HTTP_200_OK)
+    
+    def put(self, request):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response({'error': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            serializer.save()
+            return Response({'user': serializer.data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProfileDetailView(APIView):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Return profile details including skills, experience, etc.
+        return Response({'user': UserSerializer(request.user).data}, status=status.HTTP_200_OK)
+    
+    def put(self, request):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response({'error': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            serializer.save()
+            return Response({'user': serializer.data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ChangePasswordView(APIView):
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        
+        if not old_password or not new_password:
+            return Response({'error': 'Old password and new password are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not request.user.check_password(old_password):
+            return Response({'error': 'Invalid old password'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            request.user.set_password(new_password)
+            request.user.save()
+            return Response({'message': 'Password changed successfully'}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

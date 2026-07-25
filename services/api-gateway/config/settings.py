@@ -23,9 +23,8 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
     "gateway.middleware.correlation.CorrelationMiddleware",
+    "gateway.middleware.jwt_auth.JWTAuthenticationMiddleware",
     "gateway.middleware.rate_limit.RateLimitMiddleware",
-    "gateway.middleware.auth.AuthMiddleware",
-    "gateway.middleware.validation.ValidationMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -59,7 +58,9 @@ INTERNAL_TOKEN = config("INTERNAL_TOKEN", default="internal-token-change-me")
 
 # JWT Configuration
 JWT_SECRET_KEY = config("JWT_SECRET_KEY", default=SECRET_KEY)
+JWT_ALGORITHM = config("JWT_ALGORITHM", default="HS256")
 JWT_ACCESS_TOKEN_LIFETIME_MINUTES = config("JWT_ACCESS_TOKEN_LIFETIME_MINUTES", default=60, cast=int)
+JWT_REFRESH_TOKEN_LIFETIME_DAYS = config("JWT_REFRESH_TOKEN_LIFETIME_DAYS", default=7, cast=int)
 
 # CORS configuration
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:3000,http://localhost:8000").split(",")

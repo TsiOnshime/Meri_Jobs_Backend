@@ -1,311 +1,291 @@
-from django.http import JsonResponse, HttpResponse
-from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
-from django.conf import settings
-import json
-import logging
+from django.http import JsonResponse
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from drf_spectacular.utils import extend_schema
+from .clients.user_service import UserServiceClient
+from .clients.matching_engine import MatchingEngineClient
+import uuid
 
-logger = logging.getLogger(__name__)
+
+def error_response(code, message, status_code=status.HTTP_400_BAD_REQUEST):
+    """Standard error response format matching frontend spec."""
+    return Response({
+        "error": {
+            "code": code,
+            "message": message
+        },
+        "correlation_id": str(uuid.uuid4())
+    }, status=status_code)
 
 
+@api_view(["GET"])
 def health(request):
     """Liveness check -- used by docker-compose / orchestration."""
     return JsonResponse({"status": "ok", "service": "api-gateway"})
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(["GET"])
+def service_health(request):
+    """Health check for all backend services."""
+    user_client = UserServiceClient()
+    matching_client = MatchingEngineClient()
+    
+    services = {
+        "api-gateway": {"status": "ok"},
+        "users": user_client.health_check(),
+        "matching-engine": matching_client.health_check(),
+    }
+    
+    return Response(services)
+
+
+# Authentication endpoints
+@api_view(["POST"])
 def auth_register(request):
-    """Proxy register request to users service"""
-    from .clients.http_client import HttpClient
-    from .events.producer import KafkaProducer
-    import asyncio
+    """Proxy registration request to users service."""
+    user_client = UserServiceClient()
     
-    url = f"{settings.USERS_URL}/api/v1/auth/register"
-    data = json.loads(request.body)
+    result = user_client.register_user(request.data)
     
-    client = HttpClient()
-    result = asyncio.run(client.post(url, data=data))
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
     
-    # Publish user registered event on success
-    if result['status_code'] == 201:
-        producer = KafkaProducer()
-        user_data = result['data'].get('user', {})
-        producer.publish_user_registered(
-            user_data.get('id'),
-            user_data.get('email'),
-            user_data.get('name')
-        )
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+    return Response(result, status=status.HTTP_201_CREATED)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(["POST"])
 def auth_login(request):
-    """Proxy login request to users service"""
-    from .clients.http_client import HttpClient
-    import asyncio
+    """Proxy login request to users service."""
+    user_client = UserServiceClient()
+    email = request.data.get("email")
+    password = request.data.get("password")
     
-    url = f"{settings.USERS_URL}/api/v1/auth/login"
-    data = json.loads(request.body)
+    if not email or not password:
+        return error_response("VALIDATION_ERROR", "Email and password are required")
     
-    client = HttpClient()
-    result = asyncio.run(client.post(url, data=data))
+    result = user_client.login_user(email, password)
     
-    return JsonResponse(result['data'], status=result['status_code'])
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result, status=status.HTTP_200_OK)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(["POST"])
 def auth_refresh(request):
-    """Proxy token refresh request to users service"""
-    from .clients.http_client import HttpClient
-    import asyncio
+    """Proxy token refresh request to users service."""
+    user_client = UserServiceClient()
+    refresh_token = request.data.get("refresh")
     
-    url = f"{settings.USERS_URL}/api/v1/auth/refresh"
-    data = json.loads(request.body)
+    if not refresh_token:
+        return error_response("VALIDATION_ERROR", "Refresh token is required")
     
-    client = HttpClient()
-    result = asyncio.run(client.post(url, data=data))
+    result = user_client.refresh_token(refresh_token)
     
-    return JsonResponse(result['data'], status=result['status_code'])
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result, status=status.HTTP_200_OK)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(["POST"])
 def auth_logout(request):
-    """Proxy logout request to users service"""
-    from .clients.http_client import HttpClient
-    import asyncio
+    """Proxy logout request to users service."""
+    # Authentication is handled by middleware
+    user_client = UserServiceClient()
+    user_client.set_auth_token(request.auth_token)
     
-    url = f"{settings.USERS_URL}/api/v1/auth/logout"
-    data = json.loads(request.body)
+    result = user_client.logout(request.data.get("refresh"), request.auth_token)
     
-    client = HttpClient()
-    result = asyncio.run(client.post(url, data=data))
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
     
-    return JsonResponse(result['data'], status=result['status_code'])
+    return Response(result, status=status.HTTP_200_OK)
 
 
-@require_http_methods(["GET"])
+@api_view(["GET"])
 def auth_me(request):
-    """Proxy current user request to users service"""
-    from .clients.http_client import HttpClient
-    import asyncio
+    """Proxy current user request to users service."""
+    # Authentication is handled by middleware
+    user_client = UserServiceClient()
+    user_client.set_auth_token(request.auth_token)
     
-    url = f"{settings.USERS_URL}/api/v1/auth/me"
-    headers = {'Authorization': request.META.get('HTTP_AUTHORIZATION', '')}
+    result = user_client.get_me(request.auth_token)
     
-    client = HttpClient()
-    result = asyncio.run(client.get(url, headers=headers))
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
     
-    return JsonResponse(result['data'], status=result['status_code'])
+    return Response(result)
 
 
-# CV Parser Routing
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(["POST"])
+def auth_change_password(request):
+    """Proxy password change request to users service."""
+    # Authentication is handled by middleware
+    user_client = UserServiceClient()
+    user_client.set_auth_token(request.auth_token)
+    
+    result = user_client.change_password(request.data, request.auth_token)
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
+
+
+@api_view(["GET", "PUT"])
+def profile(request):
+    """Proxy profile request to users service."""
+    # Authentication is handled by middleware
+    user_client = UserServiceClient()
+    user_client.set_auth_token(request.auth_token)
+    
+    if request.method == "GET":
+        result = user_client.get_profile(request.auth_token)
+    else:  # PUT
+        result = user_client.update_profile(request.data, request.auth_token)
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
+
+
+@api_view(["GET", "PUT"])
+def profile_detail(request):
+    """Proxy profile detail request to users service."""
+    # Authentication is handled by middleware
+    user_client = UserServiceClient()
+    user_client.set_auth_token(request.auth_token)
+    
+    if request.method == "GET":
+        result = user_client.get_profile_detail(request.auth_token)
+    else:  # PUT
+        result = user_client.update_profile_detail(request.data, request.auth_token)
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
+
+
+# CV Parser endpoints (proxied to cv-parser service)
+@api_view(["POST"])
 def cv_upload(request):
-    """Proxy CV upload to cv-parser service"""
-    from .clients.http_client import HttpClient
-    from .events.producer import KafkaProducer
-    import asyncio
-    
-    url = f"{settings.CV_PARSER_URL}/internal/cv/upload"
-    data = {'user_id': request.user_id}
-    files = {'file': request.FILES.get('file')}
-    
-    client = HttpClient()
-    result = asyncio.run(client.post(url, data=data, files=files))
-    
-    # Publish CV uploaded event on success
-    if result['status_code'] == 202:
-        producer = KafkaProducer()
-        cv_data = result['data']
-        producer.publish_cv_uploaded(
-            request.user_id,
-            cv_data.get('cv_id'),
-            request.FILES.get('file').name if request.FILES.get('file') else 'unknown'
-        )
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+    """Proxy CV upload request to cv-parser service."""
+    # Authentication is handled by middleware
+    # TODO: Implement cv-parser client
+    return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
 
-@require_http_methods(["GET"])
+@api_view(["GET"])
 def cv_status(request, cv_id):
-    """Proxy CV status request to cv-parser service"""
-    from .clients.http_client import HttpClient
-    import asyncio
-    
-    url = f"{settings.CV_PARSER_URL}/internal/cv/{cv_id}/status"
-    
-    client = HttpClient()
-    result = asyncio.run(client.get(url))
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+    """Proxy CV status request to cv-parser service."""
+    # Authentication is handled by middleware
+    # TODO: Implement cv-parser client
+    return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
 
-@csrf_exempt
-@require_http_methods(["PATCH"])
-def cv_edit(request, cv_id):
-    """Proxy CV edit request to cv-parser service"""
-    from .clients.http_client import HttpClient
-    import asyncio
-    
-    url = f"{settings.CV_PARSER_URL}/internal/cv/{cv_id}"
-    data = json.loads(request.body)
-    
-    client = HttpClient()
-    result = asyncio.run(client.patch(url, data=data))
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+@api_view(["PATCH"])
+def cv_update(request, cv_id):
+    """Proxy CV update request to cv-parser service."""
+    # Authentication is handled by middleware
+    # TODO: Implement cv-parser client
+    return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
 
-@require_http_methods(["GET"])
+@api_view(["GET"])
 def cv_export(request, cv_id):
-    """Proxy CV export request to cv-parser service"""
-    from .clients.http_client import HttpClient
-    import asyncio
-    
-    url = f"{settings.CV_PARSER_URL}/internal/cv/{cv_id}/export"
-    
-    client = HttpClient()
-    result = asyncio.run(client.get(url))
-    
-    if result['status_code'] == 200:
-        # Stream PDF response
-        return HttpResponse(result['data'], content_type='application/pdf')
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+    """Proxy CV export request to cv-parser service."""
+    # Authentication is handled by middleware
+    # TODO: Implement cv-parser client
+    return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def cv_suggestion_action(request, cv_id):
-    """Proxy CV suggestion action to cv-parser service"""
-    from .clients.http_client import HttpClient
-    import asyncio
-    
-    url = f"{settings.CV_PARSER_URL}/internal/cv/{cv_id}/suggestions/accept"
-    data = json.loads(request.body)
-    
-    client = HttpClient()
-    result = asyncio.run(client.post(url, data=data))
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+@api_view(["POST"])
+def cv_suggestions_accept(request, cv_id):
+    """Proxy CV suggestion accept request to cv-parser service."""
+    # Authentication is handled by middleware
+    # TODO: Implement cv-parser client
+    return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
 
-# Matching Engine Routing
-@require_http_methods(["GET"])
+# Matching Engine endpoints
+@api_view(["GET"])
 def matches_list(request, cv_id):
-    """Proxy matches list request to matching-engine service"""
-    from .clients.http_client import HttpClient
-    import asyncio
+    """Proxy matches list request to matching engine."""
+    # Authentication is handled by middleware
+    min_score = request.query_params.get("min_score")
+    limit = int(request.query_params.get("limit", 20))
+    offset = int(request.query_params.get("offset", 0))
+    sort = request.query_params.get("sort", "score")
     
-    url = f"{settings.MATCHING_ENGINE_URL}/internal/matches/{cv_id}"
-    params = {
-        'min_score': request.GET.get('min_score'),
-        'limit': request.GET.get('limit', 20),
-        'offset': request.GET.get('offset', 0),
-        'sort': request.GET.get('sort', 'score')
-    }
+    matching_client = MatchingEngineClient()
+    matching_client.set_auth_token(request.auth_token)
+    result = matching_client.get_matches_by_cv(cv_id, min_score, limit, offset, sort)
     
-    client = HttpClient()
-    result = asyncio.run(client.get(url, params=params))
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
     
-    return JsonResponse(result['data'], status=result['status_code'])
+    return Response(result)
 
 
-@require_http_methods(["GET"])
+@api_view(["GET"])
 def match_detail(request, cv_id, job_id):
-    """Proxy match detail request to matching-engine service"""
-    from .clients.http_client import HttpClient
-    import asyncio
+    """Proxy match detail request to matching engine."""
+    # Authentication is handled by middleware
+    matching_client = MatchingEngineClient()
+    matching_client.set_auth_token(request.auth_token)
+    result = matching_client.get_match_detail(cv_id, job_id)
     
-    url = f"{settings.MATCHING_ENGINE_URL}/internal/matches/{cv_id}/{job_id}"
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
     
-    client = HttpClient()
-    result = asyncio.run(client.get(url))
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+    return Response(result)
 
 
-# Interview Prep Routing
-@csrf_exempt
-@require_http_methods(["POST"])
+# Interview Prep endpoints (proxied to interview-prep service)
+@api_view(["POST"])
 def interview_session(request):
-    """Proxy interview session creation to interview-prep service"""
-    from .clients.http_client import HttpClient
-    import asyncio
-    
-    url = f"{settings.INTERVIEW_PREP_URL}/internal/interview/session"
-    data = json.loads(request.body)
-    data['user_id'] = request.user_id
-    
-    client = HttpClient()
-    result = asyncio.run(client.post(url, data=data))
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+    """Proxy interview session creation to interview-prep service."""
+    # Authentication is handled by middleware
+    # TODO: Implement interview-prep client
+    return error_response("SERVICE_UNAVAILABLE", "Interview Prep service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(["POST"])
 def interview_answer(request, session_id):
-    """Proxy interview answer submission to interview-prep service"""
-    from .clients.http_client import HttpClient
-    import asyncio
-    
-    url = f"{settings.INTERVIEW_PREP_URL}/internal/interview/{session_id}/answer"
-    data = json.loads(request.body)
-    
-    client = HttpClient()
-    result = asyncio.run(client.post(url, data=data))
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+    """Proxy interview answer submission to interview-prep service."""
+    # Authentication is handled by middleware
+    # TODO: Implement interview-prep client
+    return error_response("SERVICE_UNAVAILABLE", "Interview Prep service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
 
-@require_http_methods(["GET"])
-def interview_answer_status(request, answer_id):
-    """Proxy interview answer status check to interview-prep service"""
-    from .clients.http_client import HttpClient
-    import asyncio
-    
-    url = f"{settings.INTERVIEW_PREP_URL}/internal/interview/answer/{answer_id}"
-    
-    client = HttpClient()
-    result = asyncio.run(client.get(url))
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+@api_view(["GET"])
+def interview_answer_feedback(request, answer_id):
+    """Proxy interview answer feedback request to interview-prep service."""
+    # Authentication is handled by middleware
+    # TODO: Implement interview-prep client
+    return error_response("SERVICE_UNAVAILABLE", "Interview Prep service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
 
-@require_http_methods(["GET"])
+@api_view(["GET"])
 def interview_history(request):
-    """Proxy interview history request to interview-prep service"""
-    from .clients.http_client import HttpClient
-    import asyncio
+    """Proxy interview history request to interview-prep service."""
+    # Authentication is handled by middleware
+    limit = int(request.query_params.get("limit", 10))
+    offset = int(request.query_params.get("offset", 0))
+    job_id = request.query_params.get("job_id")
     
-    url = f"{settings.INTERVIEW_PREP_URL}/internal/interview/history/{request.user_id}"
-    params = {
-        'limit': request.GET.get('limit'),
-        'offset': request.GET.get('offset'),
-        'job_id': request.GET.get('job_id')
-    }
-    
-    client = HttpClient()
-    result = asyncio.run(client.get(url, params=params))
-    
-    return JsonResponse(result['data'], status=result['status_code'])
+    # TODO: Implement interview-prep client
+    return error_response("SERVICE_UNAVAILABLE", "Interview Prep service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
 
 
-# Dashboard Aggregation
-@require_http_methods(["GET"])
+# Dashboard endpoint
+@api_view(["GET"])
 def dashboard(request):
-    """Aggregate dashboard data from multiple services"""
-    from .aggregation.dashboard_service import DashboardService
-    import asyncio
-    
-    dashboard_service = DashboardService()
-    dashboard_data = asyncio.run(dashboard_service.get_dashboard_data(request.user_id))
-    
-    return JsonResponse(dashboard_data, status=200)
+    """Aggregate dashboard data from multiple services."""
+    # Authentication is handled by middleware
+    # TODO: Aggregate data from users, cv-parser, matching-engine, and interview-prep
+    return error_response("SERVICE_UNAVAILABLE", "Dashboard aggregation not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
