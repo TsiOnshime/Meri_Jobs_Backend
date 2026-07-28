@@ -9,8 +9,8 @@ class UserServiceClient:
     
     def __init__(self):
         self.base_url = config(
-            "USERS_SERVICE_URL", 
-            default="http://users:8001"
+            "USERS_URL", 
+            default="http://users:8005"
         )
         self.timeout = 10
     

@@ -92,6 +92,17 @@ services:
       - "8002:8002"
     volumes:
       - ./services/matching-engine:/app
+  matching-engine-worker:
+    build: ./services/matching-engine
+    env_file: .env
+    depends_on: 
+      postgres: 
+        condition: service_healthy
+      kafka: 
+        condition: service_healthy
+    command: python manage.py consume_events
+    volumes:
+      - ./services/matching-engine:/app
 
   job-ingestion:
     build: ./services/job-ingestion

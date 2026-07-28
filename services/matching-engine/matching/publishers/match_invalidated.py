@@ -1,18 +1,14 @@
-"""Builds and publishes match.found, once per qualifying candidate."""
-
 import json
-import logging
+import logging 
 from datetime import datetime, timezone
 from confluent_kafka import Producer
 from django.conf import settings
-
-from matching.models import CV, Job
 
 logger = logging.getLogger(__name__)
 
 _producer = Producer({"bootstrap.servers": settings.KAFKA_BROKER_URL})
 
-TOPIC = "match.found"
+TOPIC = "match.invalidated"
 
 def _delivery_callback(err, msg):
     if err is not None:
@@ -20,22 +16,19 @@ def _delivery_callback(err, msg):
             "kafka_delivery_failed", 
             extra={"topic": msg.topic(), "error": str(err)}
         )
-
-
-def publish_match_found(cv: CV, job: Job, overall_score: int, breakdown: dict) -> None:
+        
+def publish_match_invalidated(cv_id, job_id, reason: str) -> None:
     payload = {
-        "event": "match.found", 
-        "cv_id": str(cv.cv_id), 
-        "job_id": str(job.job_id),
-        "overall_score": overall_score, 
-        "source_url": job.source_url,
-        "breakdown": breakdown, 
-        "computed_at": datetime.now(timezone.utc).isoformat()
+        "event": "match.invalidated",
+        "cv_id": str(cv_id),
+        "job_id": str(job_id), 
+        "reason": reason,
+        "invalidated_at": datetime.now(timezone.utc).isoformat()
     }
     
     _producer.produce(
         TOPIC,
-        key=str(cv.cv_id), 
+        key=str(cv_id),
         value=json.dumps(payload),
         callback=_delivery_callback
     )

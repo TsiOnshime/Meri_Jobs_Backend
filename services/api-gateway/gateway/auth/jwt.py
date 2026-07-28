@@ -98,6 +98,7 @@ class JWTAuthentication:
             "/api/v1/health",
             "/api/v1/auth/register",
             "/api/v1/auth/login",
+            "/api/schema"
         ]
         
         return any(path.startswith(endpoint) for endpoint in public_endpoints)
