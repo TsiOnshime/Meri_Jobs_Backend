@@ -48,6 +48,20 @@ the rejection/invalidation signal for now.
 
 ---
 
+## `match.invalidated`
+**Schema:** `match_invalidated.schema.json`
+**Publisher:** `matching-engine`
+**Consumers:** `interview-prep`
+
+Fired when a previously-existing match gets deleted during reconciliation
+— either because a CV was edited and this job no longer qualifies, or a
+job was re-ingested with changes and this CV no longer qualifies. `reason`
+distinguishes which side triggered it (`cv_updated` or `job_updated`).
+
+Consumers that cached or generated content based on a `match.found` event
+(e.g. pre-generated interview questions) should treat this as a signal to
+discard that content — it's for a pairing that no longer exists.
+
 ## Adding a new event
 
 1. Add the schema file here, following the same shape as the existing ones.

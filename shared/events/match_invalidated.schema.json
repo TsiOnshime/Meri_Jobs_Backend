@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "match.invalidated",
+  "description": "Published by matching-engine when a previously-existing match is deleted because a CV edit or job re-ingestion means it no longer passes the gate. Consumed by interview-prep.",
+  "type": "object",
+  "required": ["event", "cv_id", "job_id", "reason", "invalidated_at"],
+  "properties": {
+    "event": { "const": "match.invalidated" },
+    "cv_id": { "type": "string", "format": "uuid" },
+    "job_id": { "type": "string", "format": "uuid" },
+    "reason": {
+      "type": "string",
+      "enum": ["cv_updated", "job_updated"],
+      "description": "Which side triggered the reconciliation that removed this match."
+    },
+    "invalidated_at": { "type": "string", "format": "date-time" }
+  },
+  "example": {
+    "event": "match.invalidated",
+    "cv_id": "cv_8841",
+    "job_id": "job_1187",
+    "reason": "cv_updated",
+    "invalidated_at": "2026-07-15T09:00:00Z"
+  }
+}
