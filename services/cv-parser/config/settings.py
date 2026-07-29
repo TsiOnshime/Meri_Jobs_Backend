@@ -66,7 +66,7 @@ REST_FRAMEWORK = {
         "parser.authentication.InternalTokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
+        "rest_framework.permissions.AllowAny",  # Allow requests with internal token
     ],
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",

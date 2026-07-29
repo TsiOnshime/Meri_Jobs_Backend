@@ -92,7 +92,7 @@ class UserServiceClient:
         """Register a new user."""
         return self._make_request(
             "POST",
-            "/api/v1/auth/register/",
+            "/api/v1/auth/register",
             data=user_data
         )
     
@@ -100,7 +100,7 @@ class UserServiceClient:
         """Login user and get tokens."""
         return self._make_request(
             "POST",
-            "/api/v1/auth/login/",
+            "/api/v1/auth/login",
             data={"email": email, "password": password}
         )
     
@@ -108,16 +108,18 @@ class UserServiceClient:
         """Refresh access token."""
         return self._make_request(
             "POST",
-            "/api/v1/auth/refresh/",
+            "/api/v1/auth/refresh",
             data={"refresh": refresh_token}
         )
     
-    def logout(self, refresh_token: str, auth_token: str) -> Dict[str, Any]:
+    def logout(self, refresh_token: str, auth_token: str = None) -> Dict[str, Any]:
         """Logout user by blacklisting refresh token."""
-        headers = {"Authorization": f"Bearer {auth_token}"}
+        headers = {}
+        if auth_token:
+            headers["Authorization"] = f"Bearer {auth_token}"
         return self._make_request(
             "POST",
-            "/api/v1/auth/logout/",
+            "/api/v1/auth/logout",
             data={"refresh": refresh_token},
             headers=headers
         )
@@ -127,7 +129,7 @@ class UserServiceClient:
         headers = {"Authorization": f"Bearer {auth_token}"}
         return self._make_request(
             "GET",
-            "/api/v1/auth/me/",
+            "/api/v1/auth/me",
             headers=headers
         )
     
@@ -136,7 +138,7 @@ class UserServiceClient:
         headers = {"Authorization": f"Bearer {auth_token}"}
         return self._make_request(
             "POST",
-            "/api/v1/auth/change-password/",
+            "/api/v1/auth/change-password",
             data=password_data,
             headers=headers
         )
@@ -146,7 +148,7 @@ class UserServiceClient:
         headers = {"Authorization": f"Bearer {auth_token}"}
         return self._make_request(
             "GET",
-            "/api/v1/profile/",
+            "/api/v1/auth/profile",
             headers=headers
         )
     
@@ -155,7 +157,7 @@ class UserServiceClient:
         headers = {"Authorization": f"Bearer {auth_token}"}
         return self._make_request(
             "PUT",
-            "/api/v1/profile/",
+            "/api/v1/auth/profile",
             data=profile_data,
             headers=headers
         )
@@ -165,7 +167,7 @@ class UserServiceClient:
         headers = {"Authorization": f"Bearer {auth_token}"}
         return self._make_request(
             "GET",
-            "/api/v1/profile/detail/",
+            "/api/v1/auth/profile/detail",
             headers=headers
         )
     
@@ -174,7 +176,7 @@ class UserServiceClient:
         headers = {"Authorization": f"Bearer {auth_token}"}
         return self._make_request(
             "PUT",
-            "/api/v1/profile/detail/",
+            "/api/v1/auth/profile/detail",
             data=profile_data,
             headers=headers
         )

@@ -5,6 +5,7 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema
 from .clients.user_service import UserServiceClient
 from .clients.matching_engine import MatchingEngineClient
+from .clients.cv_parser import CVParserClient
 import uuid
 
 
@@ -94,9 +95,11 @@ def auth_logout(request):
     """Proxy logout request to users service."""
     # Authentication is handled by middleware
     user_client = UserServiceClient()
-    user_client.set_auth_token(request.auth_token)
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        user_client.set_auth_token(auth_token)
     
-    result = user_client.logout(request.data.get("refresh"), request.auth_token)
+    result = user_client.logout(request.data.get("refresh"), auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -109,9 +112,11 @@ def auth_me(request):
     """Proxy current user request to users service."""
     # Authentication is handled by middleware
     user_client = UserServiceClient()
-    user_client.set_auth_token(request.auth_token)
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        user_client.set_auth_token(auth_token)
     
-    result = user_client.get_me(request.auth_token)
+    result = user_client.get_me(auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -124,9 +129,11 @@ def auth_change_password(request):
     """Proxy password change request to users service."""
     # Authentication is handled by middleware
     user_client = UserServiceClient()
-    user_client.set_auth_token(request.auth_token)
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        user_client.set_auth_token(auth_token)
     
-    result = user_client.change_password(request.data, request.auth_token)
+    result = user_client.change_password(request.data, auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -139,12 +146,14 @@ def profile(request):
     """Proxy profile request to users service."""
     # Authentication is handled by middleware
     user_client = UserServiceClient()
-    user_client.set_auth_token(request.auth_token)
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        user_client.set_auth_token(auth_token)
     
     if request.method == "GET":
-        result = user_client.get_profile(request.auth_token)
+        result = user_client.get_profile(auth_token)
     else:  # PUT
-        result = user_client.update_profile(request.data, request.auth_token)
+        result = user_client.update_profile(request.data, auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -157,12 +166,14 @@ def profile_detail(request):
     """Proxy profile detail request to users service."""
     # Authentication is handled by middleware
     user_client = UserServiceClient()
-    user_client.set_auth_token(request.auth_token)
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        user_client.set_auth_token(auth_token)
     
     if request.method == "GET":
-        result = user_client.get_profile_detail(request.auth_token)
+        result = user_client.get_profile_detail(auth_token)
     else:  # PUT
-        result = user_client.update_profile_detail(request.data, request.auth_token)
+        result = user_client.update_profile_detail(request.data, auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -175,40 +186,101 @@ def profile_detail(request):
 def cv_upload(request):
     """Proxy CV upload request to cv-parser service."""
     # Authentication is handled by middleware
-    # TODO: Implement cv-parser client
-    return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
+    cv_client = CVParserClient()
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        cv_client.set_auth_token(auth_token)
+    
+    # Use user_id from JWT token (already validated by middleware)
+    user_id = getattr(request, 'user_id', None)
+    if not user_id:
+        return error_response("VALIDATION_ERROR", "User ID required from authentication")
+    
+    file_obj = request.FILES.get("file")
+    if not file_obj:
+        return error_response("VALIDATION_ERROR", "File required")
+    
+    # Pass Django file object directly - it's already file-like
+    # Don't convert to BytesIO to preserve Django's file handling
+    result = cv_client.upload_cv(file_obj, user_id)
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
 def cv_status(request, cv_id):
     """Proxy CV status request to cv-parser service."""
     # Authentication is handled by middleware
-    # TODO: Implement cv-parser client
-    return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
+    cv_client = CVParserClient()
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        cv_client.set_auth_token(auth_token)
+    
+    result = cv_client.get_cv_status(cv_id)
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
 
 
 @api_view(["PATCH"])
 def cv_update(request, cv_id):
     """Proxy CV update request to cv-parser service."""
     # Authentication is handled by middleware
-    # TODO: Implement cv-parser client
-    return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
+    cv_client = CVParserClient()
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        cv_client.set_auth_token(auth_token)
+    
+    result = cv_client.update_cv(cv_id, request.data)
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
 
 
 @api_view(["GET"])
 def cv_export(request, cv_id):
     """Proxy CV export request to cv-parser service."""
     # Authentication is handled by middleware
-    # TODO: Implement cv-parser client
-    return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
+    cv_client = CVParserClient()
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        cv_client.set_auth_token(auth_token)
+    
+    format = request.query_params.get("format", "pdf")
+    result = cv_client.export_cv(cv_id, format)
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
 
 
 @api_view(["POST"])
 def cv_suggestions_accept(request, cv_id):
     """Proxy CV suggestion accept request to cv-parser service."""
     # Authentication is handled by middleware
-    # TODO: Implement cv-parser client
-    return error_response("SERVICE_UNAVAILABLE", "CV Parser service not yet implemented", status.HTTP_501_NOT_IMPLEMENTED)
+    cv_client = CVParserClient()
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        cv_client.set_auth_token(auth_token)
+    
+    suggestion_id = request.data.get("suggestion_id")
+    if not suggestion_id:
+        return error_response("VALIDATION_ERROR", "Suggestion ID required")
+    
+    result = cv_client.accept_suggestion(cv_id, suggestion_id)
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
 
 
 # Matching Engine endpoints
@@ -222,7 +294,9 @@ def matches_list(request, cv_id):
     sort = request.query_params.get("sort", "score")
     
     matching_client = MatchingEngineClient()
-    matching_client.set_auth_token(request.auth_token)
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        matching_client.set_auth_token(auth_token)
     result = matching_client.get_matches_by_cv(cv_id, min_score, limit, offset, sort)
     
     if "error" in result:
@@ -236,7 +310,9 @@ def match_detail(request, cv_id, job_id):
     """Proxy match detail request to matching engine."""
     # Authentication is handled by middleware
     matching_client = MatchingEngineClient()
-    matching_client.set_auth_token(request.auth_token)
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        matching_client.set_auth_token(auth_token)
     result = matching_client.get_match_detail(cv_id, job_id)
     
     if "error" in result:
