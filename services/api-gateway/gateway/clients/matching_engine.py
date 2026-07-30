@@ -70,7 +70,7 @@ class MatchingEngineClient:
         
         return self._make_request(
             "GET",
-            f"/api/v1/matches/{cv_id}",
+            f"/internal/matches/{cv_id}",
             params=params
         )
     
@@ -78,14 +78,14 @@ class MatchingEngineClient:
         """Get detailed match analysis for a specific CV and job."""
         return self._make_request(
             "GET",
-            f"/api/v1/matches/{cv_id}/{job_id}"
+            f"/internal/matches/{cv_id}/{job_id}"
         )
     
     def create_match(self, user_id: str, job_id: str) -> Dict[str, Any]:
         """Create a new match between user and job."""
         return self._make_request(
             "POST",
-            "/api/v1/matches",
+            "/internal/matches",
             data={"user_id": user_id, "job_id": job_id}
         )
     
@@ -93,10 +93,10 @@ class MatchingEngineClient:
         """Update match score."""
         return self._make_request(
             "PUT",
-            f"/api/v1/matches/{match_id}",
+            f"/internal/matches/{match_id}",
             data={"score": score}
         )
     
     def health_check(self) -> Dict[str, Any]:
         """Check matching engine service health."""
-        return self._make_request("GET", "/health/")
+        return self._make_request("GET", "/internal/health")

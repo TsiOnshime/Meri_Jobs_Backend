@@ -86,6 +86,11 @@ REQUEST_TIMEOUT = config("REQUEST_TIMEOUT", default=30, cast=int)
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "gateway.handlers.custom_exception_handler",
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.MultiPartParser",
+        "rest_framework.parsers.FormParser",
+    ],
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
