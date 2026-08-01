@@ -62,11 +62,9 @@ KAFKA_CV_PARSED_TOPIC = config("KAFKA_CV_PARSED_TOPIC", default="cv.parsed")
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "parser.authentication.InternalTokenAuthentication",
-    ],
+    "DEFAULT_AUTHENTICATION_CLASSES": [],  # Disabled for internal service communication
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.AllowAny",  # Allow requests with internal token
+        "rest_framework.permissions.AllowAny",
     ],
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",

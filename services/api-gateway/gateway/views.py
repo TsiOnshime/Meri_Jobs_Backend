@@ -196,7 +196,19 @@ def cv_upload(request):
     if not user_id:
         return error_response("VALIDATION_ERROR", "User ID required from authentication")
     
+    # Try to get file from FILES (if multipart parsing worked)
     file_obj = request.FILES.get("file")
+    
+    # If not in FILES, try to manually parse the request
+    if not file_obj and hasattr(request, 'body'):
+        # Manual multipart parsing for clients sending wrong Content-Type
+        import io
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        # This is a fallback - if the body contains file data, try to extract it
+        # For now, return a helpful error
+        return error_response("INVALID_REQUEST", "File upload failed. Ensure Content-Type is multipart/form-data", status.HTTP_400_BAD_REQUEST)
+    
     if not file_obj:
         return error_response("VALIDATION_ERROR", "File required")
     
@@ -254,12 +266,36 @@ def cv_export(request, cv_id):
         cv_client.set_auth_token(auth_token)
     
     format = request.query_params.get("format", "pdf")
-    result = cv_client.export_cv(cv_id, format)
     
-    if "error" in result:
-        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    # For JSON format, return the parsed CV data from status endpoint
+    # CV parser export only supports PDF
+    if format == "json":
+        status_result = cv_client.get_cv_status(cv_id)
+        if "error" in status_result:
+            return error_response("SERVICE_UNAVAILABLE", status_result.get("error"), status.HTTP_502_BAD_GATEWAY)
+        return Response(status_result)
     
-    return Response(result)
+    # For PDF format, make direct request to CV parser
+    url = f"{cv_client.base_url}/internal/cv/{cv_id}/export"
+    headers = {"X-Internal-Token": cv_client.internal_token}
+    
+    try:
+        import requests
+        response = requests.get(url, params={"format": format}, headers=headers, timeout=cv_client.timeout)
+        
+        if response.status_code >= 400:
+            # Try to parse error message from response
+            error_msg = response.text
+            return error_response("SERVICE_UNAVAILABLE", error_msg, status.HTTP_502_BAD_GATEWAY)
+        
+        # Return the binary PDF response
+        from django.http import HttpResponse
+        return HttpResponse(response.content, content_type="application/pdf")
+            
+    except requests.exceptions.Timeout:
+        return error_response("SERVICE_UNAVAILABLE", "Request timeout", status.HTTP_502_BAD_GATEWAY)
+    except requests.exceptions.RequestException as e:
+        return error_response("SERVICE_UNAVAILABLE", str(e), status.HTTP_502_BAD_GATEWAY)
 
 
 @api_view(["POST"])
