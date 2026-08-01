@@ -47,7 +47,7 @@ TIME_LIMITS = {
 
 
 def generate_questions(job_title: str, focus_area: str, count: int = 10) -> list[dict]:
-    """Generate `count` mock interview questions, mixing question types.
+    """Generate `count` mock interview questions, all open_ended.
 
     Returns a list of dicts shaped for direct use when creating Question
     rows: {text, difficulty, question_type, options, correct_option,
@@ -59,47 +59,30 @@ def generate_questions(job_title: str, focus_area: str, count: int = 10) -> list
         f"'{job_title or 'Software Engineer'}', focused on "
         f"'{focus_area or 'general software engineering'}'.\n"
         f"Mix difficulty levels (easy/medium/hard) across the set.\n"
-        f"Mix question_type across the set: roughly half open_ended "
-        f"(the candidate explains something in free text) and half "
-        f"multiple_choice (exactly 4 options, exactly one correct).\n"
-        f"For open_ended questions, options must be an empty array and "
+        f"Every question must be question_type open_ended (the candidate "
+        f"explains something in free text). Do not generate multiple_choice "
+        f"questions.\n"
+        f"For every question, options must be an empty array and "
         f"correct_option must be -1."
     )
 
     raw_questions = generate_json(prompt, QUESTION_SCHEMA)
 
     # Defensive normalization -- never fully trust a free-tier model to hit
-    # `count` exactly or to respect the "empty options for open_ended" rule.
+    # `count` exactly or to actually respect the "open_ended only"
+    # instruction. Every question is forced to open_ended here regardless
+    # of what question_type the model returned, so a stray multiple_choice
+    # response can never leak through to the frontend.
     normalized = []
     for q in raw_questions[:count]:
-        q_type = q.get("question_type")
-        if q_type not in ("open_ended", "multiple_choice"):
-            q_type = "open_ended"
-
-        if q_type == "multiple_choice":
-            options = q.get("options") or []
-            correct_option = q.get("correct_option")
-            # If the model gave us something unusable for a multiple-choice
-            # question, fall back to open_ended rather than shipping a
-            # broken question to the frontend.
-            if len(options) < 2 or not isinstance(correct_option, int) or not (
-                0 <= correct_option < len(options)
-            ):
-                q_type = "open_ended"
-                options = None
-                correct_option = None
-        else:
-            options = None
-            correct_option = None
-
         normalized.append(
             {
                 "text": q["text"],
                 "difficulty": q.get("difficulty", "medium"),
-                "question_type": q_type,
-                "options": options,
-                "correct_option": correct_option,
-                "time_limit": TIME_LIMITS[q_type],
+                "question_type": "open_ended",
+                "options": None,
+                "correct_option": None,
+                "time_limit": TIME_LIMITS["open_ended"],
             }
         )
 

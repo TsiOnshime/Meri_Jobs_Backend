@@ -7,5 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 8004
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8004"]
+# No EXPOSE -- this process doesn't serve HTTP either, it long-polls the
+# match.found Kafka topic and pre-generates/caches mock interview
+# questions for matched jobs (see prep/consumers/match_found_consumer.py).
+CMD ["python", "manage.py", "consume_match_found"]

@@ -96,19 +96,31 @@ def create_session(request):
     # Isolated import: keeps the Gemini SDK/API-key requirement out of the
     # module import path for every other view (same reasoning tasks.py
     # uses for generate_feedback).
+    from .generation.job_cache import pop_cached_questions
     from .generation.questions import generate_questions
 
+    # match_found_consumer may have already pre-generated a set for this
+    # exact (job_id, focus_area) pair -- if so, use it instead of paying
+    # for another Gemini call. Redis being unreachable shouldn't block
+    # session creation, so any cache failure just falls through to a live
+    # generate_questions() call below.
     try:
-        generated = generate_questions(
-            job_title=job_title, focus_area=focus_area, count=10
-        )
+        generated = pop_cached_questions(job_id, focus_area)
     except Exception:
-        return _error(
-            "SERVICE_UNAVAILABLE",
-            "Couldn't generate interview questions right now, try again shortly",
-            503,
-            correlation_id,
-        )
+        generated = None
+
+    if not generated:
+        try:
+            generated = generate_questions(
+                job_title=job_title, focus_area=focus_area, count=10
+            )
+        except Exception:
+            return _error(
+                "SERVICE_UNAVAILABLE",
+                "Couldn't generate interview questions right now, try again shortly",
+                503,
+                correlation_id,
+            )
 
     if not generated:
         return _error(
@@ -173,13 +185,14 @@ def submit_answer(request, session_id):
                 400,
                 correlation_id,
             )
-        is_correct = selected_option == question.correct_option
+
+        from .scoring import grade_multiple_choice
+
+        result = grade_multiple_choice(question, selected_option)
         answer.selected_option = selected_option
-        answer.score = 10.0 if is_correct else 0.0
-        answer.strengths = ["Correct option selected"] if is_correct else []
-        answer.improvements = (
-            [] if is_correct else ["Review this topic -- selected option was incorrect"]
-        )
+        answer.score = result["score"]
+        answer.strengths = result["strengths"]
+        answer.improvements = result["improvements"]
         answer.status = "completed"
         answer.completed_at = timezone.now()
         answer.save()
