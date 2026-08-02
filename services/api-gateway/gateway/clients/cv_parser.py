@@ -106,7 +106,7 @@ class CVParserClient:
     def update_cv(self, cv_id: str, cv_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update CV details."""
         return self._make_request(
-            "PUT",
+            "PATCH",
             f"/internal/cv/{cv_id}",
             data=cv_data
         )

@@ -161,6 +161,8 @@ class CVEditView(APIView):
 
 class CVExportView(APIView):
     """GET /internal/cv/{id}/export -- FR2.4."""
+    authentication_classes = []  # Bypass authentication for internal service
+    permission_classes = []  # Allow any request with internal token
 
     def get(self, request, cv_id):
         try:

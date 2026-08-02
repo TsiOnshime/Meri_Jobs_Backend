@@ -18,7 +18,12 @@ class RegisterView(APIView):
             user = User.objects.create_user(
                 email=serializer.validated_data['email'],
                 password=serializer.validated_data['password'],
-                name=serializer.validated_data['name']
+                name=serializer.validated_data['name'],
+                full_name=serializer.validated_data.get('full_name', ''),
+                language=serializer.validated_data.get('language', 'en'),
+                phone=serializer.validated_data.get('phone', ''),
+                location=serializer.validated_data.get('location', ''),
+                bio=serializer.validated_data.get('bio', '')
             )
             refresh = RefreshToken.for_user(user)
             return Response({
