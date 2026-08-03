@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # ---------- Infra ----------
   zookeeper:
@@ -13,6 +11,8 @@ services:
     ports:
       - "9092:9092"
     environment:
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 30000
+      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 30000
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
@@ -137,6 +137,34 @@ services:
         condition: service_healthy
     ports:
       - "8004:8004"
+
+  interview-prep-worker:
+    build: ./services/interview-prep
+    command: celery -A config worker --loglevel=info
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./services/interview-prep:/app
+
+  interview-prep-consumer:
+    build: ./services/interview-prep
+    command: python manage.py consume_match_found
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./services/interview-prep:/app
 
   users:
     build: ./services/users
