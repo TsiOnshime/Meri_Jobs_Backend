@@ -1,8 +1,9 @@
 """Celery tasks -- async CV parsing runs here, not inline in a request."""
-"""Celery tasks -- async CV parsing runs here, not inline in a request."""
 import logging
+import os
+
 from celery import shared_task
-from django.conf import settings  # <--- Add this line here
+from django.conf import settings
 
 from .ai.llm_suggestions import get_llm_suggestions_and_clarity
 from .extraction import get_parser
@@ -12,6 +13,17 @@ from .scoring import compute_confidence, compute_cv_score
 from .suggestions.keywords import generate_suggestions
 
 logger = logging.getLogger(__name__)
+
+
+def _cleanup_file(path):
+    """Delete the uploaded file once it's no longer needed -- raw_text is
+    already saved in the database by the time this is called, so the
+    original file itself doesn't need to persist on disk afterward."""
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except OSError as exc:
+        logger.warning("Could not delete uploaded file %s: %s", path, exc)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=10)
@@ -36,7 +48,10 @@ def parse_cv_task(self, cv_id):
         )
         cv.status = CV.Status.FAILED
         cv.save(update_fields=["status", "updated_at"])
+        _cleanup_file(cv.storage_path)
         return
+
+    _cleanup_file(cv.storage_path)  # parsed successfully -- don't need the file anymore
 
     confidence, flagged_sections = compute_confidence(fields)
 
@@ -57,31 +72,29 @@ def parse_cv_task(self, cv_id):
         },
     )
 
+    # --- Suggestions + clarity + experience/role: try the LLM first,
+    # fall back to rule-based logic if it's disabled/unavailable/errors.
     llm_result = get_llm_suggestions_and_clarity(fields.get("raw_text", ""))
 
     if llm_result:
-        # 1. Unpack all 4 values returned by our updated LLM function
         suggestions, clarity_score, experience_years, role_category = llm_result
-        
+
         for s in suggestions:
             CVSuggestion.objects.create(cv=cv, **s)
-            
+
         score = compute_cv_score(fields, clarity_override=clarity_score)
-        
-        # 2. Save the new AI-calculated fields to the database!
-        if hasattr(cv, 'parsed') and cv.parsed:
-            cv.parsed.experience_years = experience_years
-            cv.parsed.role_category = role_category
-            cv.parsed.save(update_fields=["experience_years", "role_category"])
-            
+
+        parsed_cv.experience_years = experience_years
+        parsed_cv.role_category = role_category
+        parsed_cv.save(update_fields=["experience_years", "role_category"])
+
         logger.info("cv_id=%s used LLM-generated suggestions + clarity", cv.id)
     else:
         for s in generate_suggestions(fields):
             CVSuggestion.objects.create(cv=cv, **s)
-            
-        # These two lines are now properly indented inside the 'else' block!
+
         score = compute_cv_score(fields)
-        logger.info("cv_id=%s used rule-based suggestions (LLM unavailable)", cv.id)
+        logger.info("cv_id=%s used rule-based suggestions + clarity (LLM unavailable)", cv.id)
 
     CVScore.objects.update_or_create(cv=cv, defaults=score)
 

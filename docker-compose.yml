@@ -81,6 +81,20 @@ services:
     ports:
       - "8001:8001"
 
+  cv-parser-worker:
+    build: ./services/cv-parser
+    command: celery -A config worker --loglevel=info
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./services/cv-parser:/app
+
   matching-engine:
     build: ./services/matching-engine
     env_file: .env

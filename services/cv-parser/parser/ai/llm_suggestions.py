@@ -74,12 +74,13 @@ def get_llm_suggestions_and_clarity(raw_text: str):
         role_category = str(parsed.get("role_category", "unspecified"))
 
         raw_suggestions = parsed.get("suggestions", [])
-        clean_suggestions = [
-            s for s in raw_suggestions
-            if isinstance(s, dict)
-            and s.get("suggestion_text")
-            and s.get("type") in ("missing_keyword", "weak_bullet", "unquantified")
-        ]
+        clean_suggestions = []
+        for s in raw_suggestions:
+            if not (isinstance(s, dict) and s.get("suggestion_text")
+                    and s.get("type") in ("missing_keyword", "weak_bullet", "unquantified")):
+                continue
+            s["field_reference"] = str(s.get("field_reference", ""))[:250]
+            clean_suggestions.append(s)
         return clean_suggestions, clarity_score, experience_years, role_category
 
     except Exception as exc:
