@@ -30,3 +30,6 @@ db.sqlite3
 
 # Node (frontend not in this repo, but just in case)
 node_modules/
+dummy_resume.pdf
+uploaded_cvs/
+uploaded_cvs/

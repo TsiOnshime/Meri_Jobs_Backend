@@ -1,3 +1,7 @@
+"""
+Django settings for the cv-parser service.
+Config comes from environment variables (see .env.example at repo root).
+"""
 from pathlib import Path
 from decouple import config
 
@@ -22,7 +26,6 @@ MIDDLEWARE = [
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 
-# --- Database Setup (Defaults to SQLite for easy local testing) ---
 if config("USE_SQLITE", default=True, cast=bool):
     DATABASES = {
         "default": {
@@ -44,6 +47,7 @@ else:
 
 REDIS_HOST = config("REDIS_HOST", default="redis")
 REDIS_PORT = config("REDIS_PORT", default=6379, cast=int)
+
 KAFKA_BROKER_URL = config("KAFKA_BROKER_URL", default="kafka:9092")
 KAFKA_CV_PARSED_TOPIC = config("KAFKA_CV_PARSED_TOPIC", default="cv.parsed")
 
@@ -64,10 +68,8 @@ REST_FRAMEWORK = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# --- Internal auth (Updated!) ---
-INTERNAL_SHARED_TOKEN = config("INTERNAL_SHARED_TOKEN", default="internal-token-change-me")
+INTERNAL_SHARED_TOKEN = config("INTERNAL_SHARED_TOKEN", default="dev-internal-token")
 
-# --- Celery ---
 CELERY_BROKER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
 CELERY_RESULT_BACKEND = f"redis://{REDIS_HOST}:{REDIS_PORT}/1"
 CELERY_TASK_SERIALIZER = "json"
@@ -79,14 +81,9 @@ CELERY_TASK_EAGER_PROPAGATES = True
 
 MEDIA_ROOT = config("CV_STORAGE_ROOT", default=str(BASE_DIR / "uploaded_cvs"))
 MAX_UPLOAD_SIZE_BYTES = config("MAX_UPLOAD_SIZE_BYTES", default=10 * 1024 * 1024, cast=int)
+
 CV_CONFIDENCE_THRESHOLD = config("CV_CONFIDENCE_THRESHOLD", default=0.7, cast=float)
-import os
-# --- Optional LLM layer (suggestions + clarity scoring) ------------------
-# Decoupled on purpose -- if GROQ_API_KEY is blank or LLM_ENABLED=false,
-# cv-parser still fully works using the rule-based logic in scoring.py /
-# suggestions/keywords.py. Never a hard dependency.
-# Groq's API is OpenAI-compatible, so we reuse the `openai` client library
-# pointed at Groq's base_url instead of OpenAI's.
+
 LLM_ENABLED = config("LLM_ENABLED", default=True, cast=bool)
 GROQ_API_KEY = config("GROQ_API_KEY", default="")
 GROQ_BASE_URL = config("GROQ_BASE_URL", default="https://api.groq.com/openai/v1")

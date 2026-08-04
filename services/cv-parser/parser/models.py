@@ -4,14 +4,6 @@ from django.db import models
 
 
 class CV(models.Model):
-    """One uploaded CV and its lifecycle status.
-
-    status flow:
-        pending -> processing -> complete
-                              -> needs_review   (low parser confidence)
-                              -> failed         (corrupted file)
-    """
-
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
         PROCESSING = "processing", "Processing"
@@ -19,66 +11,29 @@ class CV(models.Model):
         NEEDS_REVIEW = "needs_review", "Needs review"
         FAILED = "failed", "Failed"
 
-    class FileType(models.TextChoices):
-        PDF = "pdf", "PDF"
-        DOCX = "docx", "DOCX"
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user_id = models.UUIDField(db_index=True)
     original_filename = models.CharField(max_length=255)
     storage_path = models.CharField(max_length=500)
-    file_type = models.CharField(max_length=10, choices=FileType.choices)
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
-    )
+    file_type = models.CharField(max_length=10, choices=[("pdf", "PDF"), ("docx", "DOCX")])
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"CV({self.id}, {self.status})"
-
-
-class ParsedCV(models.Model):
-    """The structured result of parsing. One-to-one with CV."""
-
-    cv = models.OneToOneField(CV, on_delete=models.CASCADE, related_name="parsed")
-
-    name = models.CharField(max_length=255, blank=True, default="")
-    email = models.CharField(max_length=255, blank=True, default="")
-    phone = models.CharField(max_length=50, blank=True, default="")
-    professional_summary = models.TextField(blank=True, null=True)
-
-    education = models.JSONField(default=list, blank=True)
-    experience = models.JSONField(default=list, blank=True)
-    skills = models.JSONField(default=list, blank=True)  # normalized skill strings
-    certifications = models.JSONField(default=list, blank=True)
-    experience_years = models.IntegerField(default=0)
-    role_category = models.CharField(max_length=100, default="unspecified")
-
-    raw_text = models.TextField(blank=True, default="")
-    parser_version = models.CharField(max_length=50, default="v1")
-
-    confidence_score = models.FloatField(default=0.0)  # 0.0 - 1.0
-    flagged_sections = models.JSONField(default=list, blank=True)
-
-    def __str__(self):
-        return f"ParsedCV(cv={self.cv_id}, confidence={self.confidence_score})"
+        return str(self.id)
 
 
 class CVScore(models.Model):
-    """The 0-100 score, broken into 3 sub-scores."""
-
-    cv = models.OneToOneField(CV, on_delete=models.CASCADE, related_name="score")
     overall = models.IntegerField()
     completeness = models.IntegerField()
     keyword_relevance = models.IntegerField()
     clarity = models.IntegerField()
     computed_at = models.DateTimeField(auto_now=True)
+    cv = models.OneToOneField("parser.CV", related_name="score", on_delete=models.CASCADE)
 
 
 class CVSuggestion(models.Model):
-    """One optimization suggestion the user can accept/reject/edit."""
-
     class Type(models.TextChoices):
         MISSING_KEYWORD = "missing_keyword", "Missing keyword"
         WEAK_BULLET = "weak_bullet", "Weak bullet"
@@ -91,52 +46,72 @@ class CVSuggestion(models.Model):
         EDITED = "edited", "Edited"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    cv = models.ForeignKey(CV, on_delete=models.CASCADE, related_name="suggestions")
     type = models.CharField(max_length=30, choices=Type.choices)
-    field_reference = models.CharField(max_length=100)
+    field_reference = models.CharField(max_length=255)
     suggestion_text = models.TextField()
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     edited_text = models.TextField(blank=True, null=True)
-
-    # Undo support: remember what status/text were before the last action,
-    # so /suggestions/undo has something to revert to.
     previous_status = models.CharField(max_length=20, blank=True, default="")
     previous_text = models.TextField(blank=True, default="")
-
     updated_at = models.DateTimeField(auto_now=True)
+    cv = models.ForeignKey("parser.CV", related_name="suggestions", on_delete=models.CASCADE)
 
     class Meta:
         ordering = ["-updated_at"]
 
-    def apply_action(self, action: str, edited_text: str | None = None):
-        self.previous_status = self.status
-        self.previous_text = self.edited_text or ""
+    def apply_action(self, action, edited_text=None):
         if action == "accept":
             self.status = self.Status.ACCEPTED
         elif action == "reject":
             self.status = self.Status.REJECTED
         elif action == "edit":
             self.status = self.Status.EDITED
-            self.edited_text = edited_text
+            if edited_text is not None:
+                self.edited_text = edited_text
+                self.suggestion_text = edited_text
         else:
-            raise ValueError(f"Unknown action: {action}")
+            raise ValueError(f"Unsupported action: {action}")
+
+        if not self.previous_status:
+            self.previous_status = self.Status.PENDING
+        if not self.previous_text:
+            self.previous_text = self.suggestion_text
+
         self.save()
 
     def undo(self):
-        if not self.previous_status:
+        if not self.previous_status and not self.previous_text:
             return False
-        self.status = self.Status.PENDING
-        self.edited_text = self.previous_text or None
+
+        self.status = self.previous_status or self.Status.PENDING
+        if self.previous_text:
+            self.suggestion_text = self.previous_text
         self.previous_status = ""
         self.previous_text = ""
-        self.save()
+        self.save(update_fields=["status", "suggestion_text", "previous_status", "previous_text", "updated_at"])
         return True
 
 
-class ParseFailureLog(models.Model):
-    """Corrupted/unusual files must be logged, never silently dropped."""
+class ParsedCV(models.Model):
+    name = models.CharField(max_length=255, blank=True, default="")
+    email = models.CharField(max_length=255, blank=True, default="")
+    phone = models.CharField(max_length=50, blank=True, default="")
+    professional_summary = models.TextField(blank=True, null=True)
+    education = models.JSONField(blank=True, default=list)
+    experience = models.JSONField(blank=True, default=list)
+    skills = models.JSONField(blank=True, default=list)
+    certifications = models.JSONField(blank=True, default=list)
+    raw_text = models.TextField(blank=True, default="")
+    parser_version = models.CharField(max_length=50, default="v1")
+    confidence_score = models.FloatField(default=0.0)
+    flagged_sections = models.JSONField(blank=True, default=list)
+    experience_years = models.IntegerField(default=0)
+    role_category = models.CharField(max_length=100, default="unspecified")
+    cv = models.OneToOneField("parser.CV", related_name="parsed", on_delete=models.CASCADE)
 
-    cv = models.ForeignKey(CV, on_delete=models.CASCADE, related_name="failure_logs")
+
+class ParseFailureLog(models.Model):
     error_type = models.CharField(max_length=100)
     error_detail = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    cv = models.ForeignKey("parser.CV", related_name="failure_logs", on_delete=models.CASCADE)
