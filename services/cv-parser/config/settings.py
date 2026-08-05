@@ -24,19 +24,6 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
-TEMPLATES = [
-    {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
-        "APP_DIRS": True,
-        "OPTIONS": {
-            "context_processors": [
-                "django.template.context_processors.debug",
-                "django.template.context_processors.request",
-            ],
-        },
-    },
-]
 WSGI_APPLICATION = "config.wsgi.application"
 
 if config("USE_SQLITE", default=True, cast=bool):
@@ -66,9 +53,11 @@ KAFKA_CV_PARSED_TOPIC = config("KAFKA_CV_PARSED_TOPIC", default="cv.parsed")
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_AUTHENTICATION_CLASSES": [],  # Disabled for internal service communication
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "parser.authentication.InternalTokenAuthentication",
+    ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.AllowAny",
+        "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",

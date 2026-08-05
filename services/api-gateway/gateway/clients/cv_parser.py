@@ -79,16 +79,12 @@ class CVParserClient:
     
     def upload_cv(self, file_obj, user_id: str) -> Dict[str, Any]:
         """Upload CV file for parsing."""
-        # Django file object needs to be wrapped properly for requests
-        files = {"file": (file_obj.name, file_obj)}
+        file_obj.seek(0)
+        file_bytes = file_obj.read()
+        files = {"file": (file_obj.name, file_bytes)}
         data = {"user_id": user_id}
-        return self._make_request(
-            "POST",
-            "/internal/cv/upload",
-            files=files,
-            data=data
-        )
-    
+        
+        return self._make_request("POST", "/internal/cv/upload", files=files, data=data)
     def get_cv_status(self, cv_id: str) -> Dict[str, Any]:
         """Get CV parsing status."""
         return self._make_request(

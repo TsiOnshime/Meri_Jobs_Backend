@@ -46,7 +46,7 @@ class CVUploadView(APIView):
         with open(storage_path, "wb") as f:
             for chunk in file_obj.chunks():
                 f.write(chunk)
-
+        print("CV-PARSER saved file:", storage_path, "size=", os.path.getsize(storage_path), flush=True)
         cv = CV.objects.create(
             user_id=user_id,
             original_filename=file_obj.name,

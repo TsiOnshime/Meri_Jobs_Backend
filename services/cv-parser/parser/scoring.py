@@ -32,8 +32,7 @@ def compute_confidence(fields: dict) -> tuple[float, list[str]]:
     return round(weighted_sum / total_weight, 2) if total_weight else 0.0, flagged
 
 
-def compute_cv_score(fields: dict, target_keywords: list[str] | None = None,
-                      clarity_override: int | None = None) -> dict:
+def compute_cv_score(fields: dict, target_keywords: list[str] | None = None, clarity_override: int | None = None) -> dict:
     """CV score explicitly split into completeness / keyword_relevance / clarity.
 
     clarity_override lets the caller plug in an LLM-judged clarity score

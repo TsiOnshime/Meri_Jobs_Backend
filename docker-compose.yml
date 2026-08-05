@@ -1,4 +1,4 @@
-version: "3.9"
+
 
 services:
   # ---------- Infra ----------
@@ -80,7 +80,8 @@ services:
         condition: service_healthy
     ports:
       - "8001:8001"
-
+    volumes:
+      - ./services/cv-parser:/app
   cv-parser-worker:
     build: ./services/cv-parser
     command: celery -A config worker --loglevel=info

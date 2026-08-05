@@ -22,7 +22,7 @@ def handle_job_ingested(event: dict) -> None:
             Match.objects.filter(job=job_id).values_list("cv_id", flat=True)
         )
         
-    resolved_skill_ids = resolve_skills(event["skills"])
+    resolved_skill_ids = resolve_skills(event["required_skills"])
     
     job, _ = Job.objects.update_or_create(
         job_id=job_id,
@@ -32,7 +32,7 @@ def handle_job_ingested(event: dict) -> None:
             "seniority_level": event["seniority_level"],
             "role_category": event["role_category"],
             "location": event["location"],
-            "source_url": event["source_url"],
+            "source_url": event["source"],
             "ingested_at": event["timestamp"]
         },
     )

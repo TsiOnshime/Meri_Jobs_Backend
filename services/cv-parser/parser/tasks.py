@@ -14,7 +14,6 @@ from .suggestions.keywords import generate_suggestions
 
 logger = logging.getLogger(__name__)
 
-
 def _cleanup_file(path):
     """Delete the uploaded file once it's no longer needed -- raw_text is
     already saved in the database by the time this is called, so the
@@ -24,7 +23,6 @@ def _cleanup_file(path):
             os.remove(path)
     except OSError as exc:
         logger.warning("Could not delete uploaded file %s: %s", path, exc)
-
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=10)
 def parse_cv_task(self, cv_id):
@@ -40,6 +38,11 @@ def parse_cv_task(self, cv_id):
     try:
         parser_module = get_parser(cv.file_type)
         fields = parser_module.parse(cv.storage_path)
+        logger.info("Raw text length: %d", len(fields.get("raw_text", "")))
+        logger.info("Name: %s", fields.get("name"))
+        logger.info("Email: %s", fields.get("email"))
+        logger.info("Experience: %s", fields.get("experience"))
+        logger.info("Skills: %s", fields.get("skills"))
     except Exception as exc:
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
