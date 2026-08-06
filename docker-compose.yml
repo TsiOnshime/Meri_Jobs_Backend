@@ -71,6 +71,7 @@ services:
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
+      - USE_SQLITE=False
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,6 +87,10 @@ services:
     build: ./services/cv-parser
     command: celery -A config worker --loglevel=info
     env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - USE_SQLITE=False
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,6 +157,8 @@ services:
         condition: service_healthy
     ports:
       - "8004:8004"
+    volumes:
+      - ./services/interview-prep:/app
 
   users:
     build: ./services/users

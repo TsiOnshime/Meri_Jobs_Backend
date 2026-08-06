@@ -14,7 +14,7 @@ class CVParserClient:
         )
         self.timeout = 10
         self.auth_token = None
-        self.internal_token = config("INTERNAL_SHARED_TOKEN", default="internal-token-change-me")
+        self.internal_token = config("INTERNAL_SHARED_TOKEN", default="dev-internal-token")
     
     def set_auth_token(self, token: str):
         """Set authentication token for requests."""
