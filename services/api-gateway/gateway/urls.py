@@ -15,7 +15,6 @@ urlpatterns = [
     
     # Profile management endpoints (proxied to users service)
     path("auth/profile/", views.profile, name="profile"),
-    path("auth/profile/detail/", views.profile_detail, name="profile_detail"),
     
     # CV Parser endpoints (proxied to cv-parser service)
     path("cv/upload", views.cv_upload, name="cv_upload"),
@@ -23,6 +22,8 @@ urlpatterns = [
     path("cv/<uuid:cv_id>", views.cv_update, name="cv_update"),
     path("cv/<uuid:cv_id>/export", views.cv_export, name="cv_export"),
     path("cv/<uuid:cv_id>/suggestions/accept", views.cv_suggestions_accept, name="cv_suggestions_accept"),
+    path("cv/<uuid:cv_id>/suggestions/accept-all", views.cv_suggestions_accept_all, name="cv_suggestions_accept_all"),
+    path("cv/<uuid:cv_id>/suggestions/undo", views.cv_suggestions_undo, name="cv_suggestions_undo"),
     
     # Matching Engine endpoints
     path("matches/<uuid:cv_id>", views.matches_list, name="matches_list"),

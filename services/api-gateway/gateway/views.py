@@ -150,30 +150,19 @@ def profile(request):
     if auth_token:
         user_client.set_auth_token(auth_token)
     
-    if request.method == "GET":
-        result = user_client.get_profile(auth_token)
-    else:  # PUT
-        result = user_client.update_profile(request.data, auth_token)
-    
-    if "error" in result:
-        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
-    
-    return Response(result)
-
-
-@api_view(["GET", "PUT"])
-def profile_detail(request):
-    """Proxy profile detail request to users service."""
-    # Authentication is handled by middleware
-    user_client = UserServiceClient()
-    auth_token = getattr(request, 'auth_token', None)
-    if auth_token:
-        user_client.set_auth_token(auth_token)
+    # Use detail parameter to determine which endpoint to call
+    detail = request.query_params.get("detail", "false").lower() == "true"
     
     if request.method == "GET":
-        result = user_client.get_profile_detail(auth_token)
+        if detail:
+            result = user_client.get_profile_detail(auth_token)
+        else:
+            result = user_client.get_profile(auth_token)
     else:  # PUT
-        result = user_client.update_profile_detail(request.data, auth_token)
+        if detail:
+            result = user_client.update_profile_detail(request.data, auth_token)
+        else:
+            result = user_client.update_profile(request.data, auth_token)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
@@ -300,7 +289,7 @@ def cv_export(request, cv_id):
 
 @api_view(["POST"])
 def cv_suggestions_accept(request, cv_id):
-    """Proxy CV suggestion accept request to cv-parser service."""
+    """Proxy CV suggestion accept/reject/edit request to cv-parser service."""
     # Authentication is handled by middleware
     cv_client = CVParserClient()
     auth_token = getattr(request, 'auth_token', None)
@@ -308,10 +297,55 @@ def cv_suggestions_accept(request, cv_id):
         cv_client.set_auth_token(auth_token)
     
     suggestion_id = request.data.get("suggestion_id")
+    action = request.data.get("action", "accept")  # Default to accept
+    edited_text = request.data.get("edited_text")
+    
     if not suggestion_id:
         return error_response("VALIDATION_ERROR", "Suggestion ID required")
     
-    result = cv_client.accept_suggestion(cv_id, suggestion_id)
+    if action not in ("accept", "reject", "edit"):
+        return error_response("VALIDATION_ERROR", "Action must be accept, reject, or edit")
+    
+    if action == "edit" and not edited_text:
+        return error_response("VALIDATION_ERROR", "edited_text is required when action=edit")
+    
+    result = cv_client.accept_suggestion(cv_id, suggestion_id, action, edited_text)
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
+
+
+@api_view(["POST"])
+def cv_suggestions_accept_all(request, cv_id):
+    """Proxy CV suggestion accept-all request to cv-parser service."""
+    # Authentication is handled by middleware
+    cv_client = CVParserClient()
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        cv_client.set_auth_token(auth_token)
+    
+    result = cv_client.accept_all_suggestions(cv_id)
+    
+    if "error" in result:
+        return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)
+    
+    return Response(result)
+
+
+@api_view(["POST"])
+def cv_suggestions_undo(request, cv_id):
+    """Proxy CV suggestion undo request to cv-parser service."""
+    # Authentication is handled by middleware
+    cv_client = CVParserClient()
+    auth_token = getattr(request, 'auth_token', None)
+    if auth_token:
+        cv_client.set_auth_token(auth_token)
+    
+    suggestion_id = request.data.get("suggestion_id")
+    
+    result = cv_client.undo_suggestion(cv_id, suggestion_id)
     
     if "error" in result:
         return error_response("SERVICE_UNAVAILABLE", result.get("error"), status.HTTP_502_BAD_GATEWAY)

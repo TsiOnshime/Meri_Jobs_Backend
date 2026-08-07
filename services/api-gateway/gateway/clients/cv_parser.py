@@ -14,7 +14,7 @@ class CVParserClient:
         )
         self.timeout = 10
         self.auth_token = None
-        self.internal_token = config("INTERNAL_SHARED_TOKEN", default="internal-token-change-me")
+        self.internal_token = config("INTERNAL_SHARED_TOKEN", default="dev-internal-token")
     
     def set_auth_token(self, token: str):
         """Set authentication token for requests."""
@@ -115,12 +115,15 @@ class CVParserClient:
             params={"format": format}
         )
     
-    def accept_suggestion(self, cv_id: str, suggestion_id: str) -> Dict[str, Any]:
-        """Accept a CV suggestion."""
+    def accept_suggestion(self, cv_id: str, suggestion_id: str, action: str = "accept", edited_text: str = None) -> Dict[str, Any]:
+        """Accept, reject, or edit a CV suggestion."""
+        data = {"suggestion_id": suggestion_id, "action": action}
+        if edited_text:
+            data["edited_text"] = edited_text
         return self._make_request(
             "POST",
             f"/internal/cv/{cv_id}/suggestions/accept",
-            data={"suggestion_id": suggestion_id}
+            data=data
         )
     
     def accept_all_suggestions(self, cv_id: str) -> Dict[str, Any]:
