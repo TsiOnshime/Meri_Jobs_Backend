@@ -40,6 +40,14 @@ DATABASES = {
 REDIS_HOST = config("REDIS_HOST", default="redis")
 REDIS_PORT = config("REDIS_PORT", default=6379, cast=int)
 
+# Celery (background answer evaluation -- internal to this service, not
+# to be confused with Kafka below, which is cross-service).
+CELERY_BROKER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+CELERY_RESULT_BACKEND = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+
 KAFKA_BROKER_URL = config("KAFKA_BROKER_URL", default="kafka:9092")
 
 REST_FRAMEWORK = {
