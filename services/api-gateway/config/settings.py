@@ -23,12 +23,24 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
     "gateway.middleware.correlation.CorrelationMiddleware",
+    "gateway.middleware.jwt_auth.JWTAuthenticationMiddleware",
     "gateway.middleware.rate_limit.RateLimitMiddleware",
-    "gateway.middleware.auth.AuthMiddleware",
-    "gateway.middleware.validation.ValidationMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+            ],
+        },
+    },
+]
 WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
@@ -59,7 +71,9 @@ INTERNAL_TOKEN = config("INTERNAL_TOKEN", default="internal-token-change-me")
 
 # JWT Configuration
 JWT_SECRET_KEY = config("JWT_SECRET_KEY", default=SECRET_KEY)
+JWT_ALGORITHM = config("JWT_ALGORITHM", default="HS256")
 JWT_ACCESS_TOKEN_LIFETIME_MINUTES = config("JWT_ACCESS_TOKEN_LIFETIME_MINUTES", default=60, cast=int)
+JWT_REFRESH_TOKEN_LIFETIME_DAYS = config("JWT_REFRESH_TOKEN_LIFETIME_DAYS", default=7, cast=int)
 
 # CORS configuration
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:3000,http://localhost:8000").split(",")
@@ -72,6 +86,11 @@ REQUEST_TIMEOUT = config("REQUEST_TIMEOUT", default=30, cast=int)
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "gateway.handlers.custom_exception_handler",
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.MultiPartParser",
+        "rest_framework.parsers.FormParser",
+    ],
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

@@ -24,6 +24,15 @@ class User(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, db_index=True)
     name = models.CharField(max_length=255)
+    full_name = models.CharField(max_length=255, blank=True)
+    language = models.CharField(
+        max_length=2,
+        choices=[('en', 'English'), ('am', 'Amharic')],
+        default='en'
+    )
+    phone = models.CharField(max_length=20, blank=True)
+    location = models.CharField(max_length=255, blank=True)
+    bio = models.TextField(blank=True)
     role = models.CharField(
         max_length=50,
         choices=[

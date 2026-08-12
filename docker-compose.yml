@@ -1,3 +1,5 @@
+
+
 services:
   # ---------- Infra ----------
   zookeeper:
@@ -51,6 +53,10 @@ services:
   api-gateway:
     build: ./services/api-gateway
     env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,6 +72,10 @@ services:
   cv-parser:
     build: ./services/cv-parser
     env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - USE_SQLITE=False
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,10 +87,30 @@ services:
       - "8001:8001"
     volumes:
       - ./services/cv-parser:/app
+  cv-parser-worker:
+    build: ./services/cv-parser
+    command: celery -A config worker --loglevel=info
+    env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - USE_SQLITE=False
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./services/cv-parser:/app
 
   matching-engine:
     build: ./services/matching-engine
     env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,8 +120,18 @@ services:
         condition: service_healthy
     ports:
       - "8002:8002"
-    volumes:
-      - ./services/matching-engine:/app
+  matching-engine-worker:
+    build: ./services/matching-engine
+    env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+    depends_on: 
+      postgres: 
+        condition: service_healthy
+      kafka: 
+        condition: service_healthy
+    command: python manage.py consume_events
 
   job-ingestion:
     build: ./services/job-ingestion
@@ -105,12 +145,13 @@ services:
         condition: service_healthy
     ports:
       - "8003:8003"
-    volumes:
-      - ./services/job-ingestion:/app
 
   interview-prep:
     build: ./services/interview-prep
     env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
     depends_on:
       postgres:
         condition: service_healthy
@@ -154,6 +195,10 @@ services:
   users:
     build: ./services/users
     env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
     depends_on:
       postgres:
         condition: service_healthy
@@ -161,8 +206,6 @@ services:
         condition: service_started
     ports:
       - "8005:8005"
-    volumes:
-      - ./services/users:/app
 
   nginx:
     image: nginx:alpine
